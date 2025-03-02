@@ -1,5 +1,5 @@
 import kagglehub
-def download():
+def download()->str:
     """download dataset raw data from kaggle
 
     Returns:

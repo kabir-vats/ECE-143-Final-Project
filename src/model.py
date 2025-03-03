@@ -11,7 +11,17 @@ from sklearn.metrics import accuracy_score
 
 
 class TextClassifier:
-    
+    models = {
+            "naive_bayes": MultinomialNB(),
+            "logistic_regression": LogisticRegression(max_iter=1000),
+            "svm": SVC(kernel="linear"),
+            "random_forest": RandomForestClassifier(n_estimators=100),
+            "knn": KNeighborsClassifier(n_neighbors=5),
+        }
+    tokenizers = {
+            "tfidf": TfidfVectorizer(),
+            "count": CountVectorizer(),
+        }
     def __init__(self, model_name="naive_bayes", tokenizer_name="tfidf"):
         
         self.vectorizer = self._get_tokenizer(tokenizer_name)
@@ -19,26 +29,18 @@ class TextClassifier:
         self.pipeline = make_pipeline(self.vectorizer, self.model)
 
     def _get_model(self, model_name):
-      
-        models = {
-            "naive_bayes": MultinomialNB(),
-            "logistic_regression": LogisticRegression(max_iter=1000),
-            "svm": SVC(kernel="linear"),
-            "random_forest": RandomForestClassifier(n_estimators=100),
-            "knn": KNeighborsClassifier(n_neighbors=5),
-        }
-        assert model_name in models, f"Model '{model_name}' is not supported. Choose from {list(models.keys())}."
-        return models[model_name]
+        assert model_name in TextClassifier.models, f"Model '{model_name}' is not supported. Choose from {list(TextClassifier.models.keys())}."
+        return TextClassifier.models[model_name]
 
     def _get_tokenizer(self, tokenizer_name):
       
-        tokenizers = {
-            "tfidf": TfidfVectorizer(),
-            "count": CountVectorizer(),
-        }
-        assert tokenizer_name in tokenizers, f"Tokenizer '{tokenizer_name}' is not supported. Choose from {list(tokenizers.keys())}."
-        return tokenizers[tokenizer_name]
-
+        
+        assert tokenizer_name in TextClassifier.tokenizers, f"Tokenizer '{tokenizer_name}' is not supported. Choose from {list(TextClassifier.tokenizers.keys())}."
+        return TextClassifier.tokenizers[tokenizer_name]
+    
+    def __str__(self):
+        return f'Vectorizer : {self.vectorizer}, Model : {self.model}'
+    
     def train(self, X_train, y_train):
       
         self.pipeline.fit(X_train, y_train)

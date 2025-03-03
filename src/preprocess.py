@@ -8,8 +8,12 @@ def preprocess_raw(new_path='../raw'):
     """    
     path=data_loader.download()
     fake_raw=pd.read_csv(path+'/Fake.csv')
+    fake_raw['text']=fake_raw['text'].astype(str).str.strip()
+    fake_raw.replace(' ',float('nan'),inplace=True)
     fake_cleaned=fake_raw.dropna()
     fake_cleaned.to_csv(new_path+'/Fake.csv')
     true_raw=pd.read_csv(path+'/True.csv')
+    true_raw['text']=true_raw['text'].astype(str).str.strip()
+    true_raw.replace('',float('nan'),inplace=True)
     true_cleaned=true_raw.dropna()
     true_cleaned.to_csv(new_path+'/True.csv')

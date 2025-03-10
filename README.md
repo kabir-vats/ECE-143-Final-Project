@@ -45,8 +45,8 @@ A comprehensive fake news detection system using multpie machine learning approa
 
 1. Clone the repository:
 ```bash
-git clone [https://github.com/kabir-vats/ECE-143-Final-Project.git]
-cd [ECE-143-Final-Project]
+git clone https://github.com/kabir-vats/ECE-143-Final-Project.git
+cd ECE-143-Final-Project
 ```
 
 

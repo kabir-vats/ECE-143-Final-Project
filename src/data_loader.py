@@ -10,7 +10,7 @@ def download()->str:
     path = kagglehub.dataset_download("clmentbisaillon/fake-and-real-news-dataset")
     return path
 
-def dataset_split(path='../raw/',ratio=(0.7,0.15,0.15))->pd.DataFrame:
+def dataset_split(path='raw/',ratio=(0.7,0.15,0.15))->pd.DataFrame:
     """split raw csv files into train, validation and test sets
 
     Args:

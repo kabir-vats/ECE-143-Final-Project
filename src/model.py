@@ -8,7 +8,7 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
-
+import joblib
 
 class TextClassifier:
     """Classifier with basic tokenizers and models
@@ -43,6 +43,13 @@ class TextClassifier:
         self.model = self._get_model(model_name)
         self.pipeline = make_pipeline(self.vectorizer, self.model)
 
+    def load_model(self, path): 
+        """Load model from path
+
+        Args:
+            path (str): path to model
+        """
+        self.pipeline = joblib.load(path)
     def _get_model(self, model_name):
         assert model_name in TextClassifier.models, f"Model '{model_name}' is not supported. Choose from {list(TextClassifier.models.keys())}."
         return TextClassifier.models[model_name]

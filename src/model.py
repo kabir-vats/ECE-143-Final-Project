@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
@@ -9,6 +10,15 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 import joblib
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Dense, Input, Embedding, LSTM, Dropout, Bidirectional
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
+from tensorflow.keras.models import load_model
+
 
 class TextClassifier:
     """Classifier with basic tokenizers and models
@@ -105,5 +115,137 @@ class TextClassifier:
         """       
         y_pred = self.predict(X_test)
         return accuracy_score(y_test, y_pred)
+
+
+class LSTMClassifier:
+    """
+    LSTM Classifier
+
+    Uses LSTM model for text classification
+    """
+
+    def __init__(self):
+        # Initialize tokenizer and model attributes
+        self.tokenizer = Tokenizer()
+        self.model = None
+        self.max_length = None
+        self.vocab_size = None
+
+    def preprocess_text(self, text: pd.DataFrame) -> pd.DataFrame:
+        """Preprocess text data.
+
+        Args:
+            text (pd.DataFrame): Text data to preprocess.
+
+        Returns:
+            pd.DataFrame: Preprocessed text data.
+        """
+        return (text.lower()
+                .replace('[^a-zA-Z]', ' ')
+                .replace('\s+', ' ')
+                .replace(r'https?://\S+|www\.\S+|[^a-zA-Z\s]', '')
+                .replace(r'<.*?>', ''))
+
+    def tokenize_text(self, x_train: pd.DataFrame) -> pd.DataFrame:
+        """Tokenize text and update tokenizer parameters."""
+        self.tokenizer.fit_on_texts(x_train)
+        train_seq = self.tokenizer.texts_to_sequences(x_train)
+        self.vocab_size = len(self.tokenizer.word_index) + 1
+        self.max_length = max(len(sequence) for sequence in train_seq)
+        return pad_sequences(train_seq, maxlen=self.max_length, padding='post', truncating='post')
+    
+    def get_seq(self, text: pd.DataFrame) -> pd.DataFrame:
+        """Convert text to padded sequences."""
+        seq = self.tokenizer.texts_to_sequences(text)
+        return pad_sequences(seq, maxlen=self.max_length, padding='post', truncating='post')
+    
+    def build_model(self) -> Sequential:
+        """Build and compile the LSTM model."""
+        lr = 1e-3
+        embedding_dim = 300
+        model = Sequential([
+            Input(shape=(self.max_length,)),
+            Embedding(self.vocab_size, embedding_dim, input_length=self.max_length, trainable=False),
+            
+            Bidirectional(LSTM(64, return_sequences=True)),
+            Bidirectional(LSTM(32)),
+            Dropout(0.2),
+            
+            Dense(256, activation='relu'),
+            Dropout(0.5),
+            
+            Dense(1, activation='sigmoid')
+        ])
+        model.compile(optimizer=Adam(learning_rate=lr), loss=BinaryCrossentropy(), metrics=['accuracy'])
+        return model
+    
+    def _merge_files(self, output_file: str, parts: list) -> None:
+        with open(output_file, "wb") as out:
+            for part in sorted(parts, key=lambda x: int(x.split("part")[-1])):
+                with open(part, "rb") as f:
+                    out.write(f.read())
+
+    def load_model(self, path: str) -> None:
+        if os.path.exists(path):
+            self.model = load_model(path)
+        else:
+            parts = [
+                "../models/best_model_h5.part1",
+                "../models/best_model_h5.part2"
+            ]
+            if all(os.path.exists(p) for p in parts):
+                merged_path = "../models/best_model.h5"
+                self._merge_files(merged_path, parts)
+                self.model = load_model(merged_path)
+            else:
+                raise FileNotFoundError("Model file not found and model parts are missing.")
+    
+    def train(self, x_train, x_val, y_train, y_val) -> None:
+        """Tokenize data, build and train the LSTM model.
+
+        Args:
+            x_train: Training texts.
+            x_val: Validation texts.
+            y_train: Training labels.
+            y_val: Validation labels.
+        """
+        train_seq = self.tokenize_text(x_train)
+        val_seq = self.get_seq(x_val)
+        self.model = self.build_model()
+        callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=2, restore_best_weights=True)
+        callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, mode='min')
+        callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
+        self.model.fit(train_seq, y_train, epochs=4, batch_size=64,
+                       validation_data=(val_seq, y_val),
+                       callbacks=[callback_es, callback_rlr, callback_cp])
+    
+    def predict(self, X_test):
+        """Make predictions using the trained model.
+
+        Args:
+            X_test: Test texts.
+
+        Returns:
+            Predictions from the model.
+        """
+        test_seq = self.get_seq(X_test)
+        return self.model.predict(test_seq)
+    
+    def evaluate(self, X_test, y_test):
+        """Evaluate the model on test data.
+
+        Args:
+            X_test: Test texts.
+            y_test: True labels.
+
+        Returns:
+            Accuracy score.
+        """
+        test_seq = self.get_seq(X_test)
+        y_pred = self.model.predict(test_seq)
+        return accuracy_score(y_test, y_pred)
+
+
+
 
 

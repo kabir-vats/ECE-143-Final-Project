@@ -20,7 +20,7 @@ class TextClassifier:
     models = {
             "naive_bayes": MultinomialNB(),
             "logistic_regression": LogisticRegression(max_iter=1000),
-            "svm": SVC(kernel="linear"),
+            "svm": SVC(kernel="linear", probability=True),
             "random_forest": RandomForestClassifier(n_estimators=100),
             "knn": KNeighborsClassifier(n_neighbors=5),
         }
@@ -50,6 +50,7 @@ class TextClassifier:
             path (str): path to model
         """
         self.pipeline = joblib.load(path)
+
     def _get_model(self, model_name):
         assert model_name in TextClassifier.models, f"Model '{model_name}' is not supported. Choose from {list(TextClassifier.models.keys())}."
         return TextClassifier.models[model_name]
@@ -77,16 +78,27 @@ class TextClassifier:
             X_test : data to predict
 
         Returns:
-            _type_: Prediction results
+            array: Prediction results
         """        
         return self.pipeline.predict(X_test)
+
+    def predict_proba(self, X_test):
+        """Predict class probabilities for X_test
+
+        Args:
+            X_test: data to predict probabilities for
+
+        Returns:
+            array: Probability estimates
+        """
+        return self.pipeline.predict_proba(X_test)
 
     def evaluate(self, X_test, y_test):
         """Evaluate model with test data
 
         Args:
-            X_test (_type_): Test data
-            y_test (_type_): Test data labels
+            X_test: Test data
+            y_test: Test data labels
 
         Returns:
             Float: acc score

@@ -6,20 +6,18 @@ from preprocess import preprocess_raw
 import os
 
 def main(model_name, tokenizer_name, save_path):
-   
+    """train a model and save it to a file
 
-    # Load data
+    Args:
+        model_name (str): model name
+        tokenizer_name (str): tokenizer name
+        save_path (str): path to save the model
+    """    
     train_df, val_df, test_df = dataset_split()
-
-    # Initialize model
     model = TextClassifier(model_name, tokenizer_name)
-
-    # Train model
     X_train = train_df['text']
     y_train = train_df['label']
     model.train(X_train, y_train)
-
-    # Save model
     joblib.dump(model, save_path)
 
 if __name__ == "__main__":

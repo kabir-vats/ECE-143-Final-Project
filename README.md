@@ -1,20 +1,105 @@
-# ECE-143-Final-Project
+# Fake News Detection with Machine Learning
 
-## Classification with basic machine learning approaches
+A comprehensive fake news detection system using multpie machine learning approaches and text classification techniques.
 
-While deep learning models are widely used in text classification tasks and have demonstrated strong performance, traditional machine learning methods offer distinct advantages, particularly in resource-constrained environments.
+## Project Structure
+```
+.
+├── src/
+│   ├── data_loader.py    # Data loading and splitting utilities
+│   ├── model.py          # Model implementations 
+│   ├── preprocess.py     # Data preprocessing and cleaning
+│   ├── train.py          # Model training script
+│   └── evaluate.py       # Model evaluation and visualization
+├── raw/                  # Directory for raw dataset files
+├── models/              # Directory for saved models
+├── docs/                # Project reports
+├── results/             # Evaluation results
+├── notebooks/           # Project demos
+└── requirements.txt     # Project dependencies
+```
 
-In this section, we implemented and evaluated the following traditional machine learning models for fake news classification:  
+## Features
 
-- **Naïve Bayes (MultinomialNB)**  
-- **Logistic Regression**  
-- **Support Vector Machine (SVM) with Linear Kernel**  
-- **Random Forest Classifier**  
-- **K-Nearest Neighbors (KNN)**  
+- Multiple classical machine learning models:
+  - Naive Bayes
+  - Logistic Regression
+  - Support Vector Machine (SVM)
+  - Random Forest
+  - K-Nearest Neighbors (KNN)
 
-For text representation, the following tokenization methods were applied:
+- Text representation methods:
+  - TF-IDF Vectorization
+  - Count Vectorization
 
-- **TF-IDF vectorization**
-- **Word Count vectorization**
+- Comprehensive evaluation metrics:
+  - Accuracy
+  - Precision
+  - Recall
+  - F1 Score
+  - ROC Curve
+  - Confusion Matrix
+  - Precision-Recall Curve
 
-To ensure modularity and ease of experimentation, both the model and tokenizer were integrated into a unified pipeline, enabling seamless training and evaluation across different configurations.
+## Installation
+
+1. Clone the repository:
+```bash
+git clone [https://github.com/kabir-vats/ECE-143-Final-Project.git]
+cd [ECE-143-Final-Project]
+```
+
+
+2. Install required packages:
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+
+### Training
+
+Train a model with specific configuration:
+
+```bash
+python src/train.py --model_name [model] --tokenizer_name [tokenizer] --save_path [path]
+```
+
+Available options:
+- model_name: naive_bayes, logistic_regression, svm, random_forest, knn
+- tokenizer_name: tfidf, count
+- save_path: path to save the trained model
+
+Example:
+```bash
+python src/train.py --model_name naive_bayes --tokenizer_name tfidf --save_path models/nb_model.pkl
+```
+
+### Evaluation
+
+Evaluate a trained model and generate visualization results:
+
+```bash
+python src/evaluate.py --model_path [model_path] --save_plots [plots_path]
+```
+
+Example:
+```bash
+python src/evaluate.py --model_path models/nb_model.pkl --save_plots results/nb_evaluation
+```
+
+## Results
+
+The evaluation script generates several visualization plots:
+- Confusion Matrix
+- ROC Curve with AUC Score
+- Precision-Recall Curve
+- Detailed Classification Report
+
+Results are saved in the specified output directory and displayed during evaluation.
+
+
+## Acknowledgments
+
+- Dataset: [Fake and Real News Dataset](https://www.kaggle.com/clmentbisaillon/fake-and-real-news-dataset)

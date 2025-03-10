@@ -73,7 +73,7 @@ Available options:
 
 Example:
 ```bash
-python src/train.py --model_name naive_bayes --tokenizer_name tfidf --save_path models/nb_model.pkl
+python src/train.py --model_name naive_bayes --tokenizer_name tfidf --save_path nb_model.pkl
 ```
 
 ### Evaluation
@@ -86,7 +86,7 @@ python src/evaluate.py --model_path [model_path] --save_plots [plots_path]
 
 Example:
 ```bash
-python src/evaluate.py --model_path models/nb_model.pkl --save_plots results/nb_evaluation
+python src/evaluate.py --model_path nb_model.pkl --save_plots results/nb_evaluation
 ```
 
 ## Results

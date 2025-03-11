@@ -1,3 +1,5 @@
+import json
+import pickle
 import pandas as pd
 import os
 import numpy as np
@@ -18,7 +20,6 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, Input, Embedding, LSTM, Dropout, Bidirectional
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
-from tensorflow.keras.models import load_model
 
 
 class TextClassifier:
@@ -173,41 +174,67 @@ class LSTMClassifier:
                 with open(part, "rb") as f:
                     out.write(f.read())
 
+    def _split_file(self, file_path, output_dir, chunk_size=90 * 1024 * 1024): 
+        file_size = os.path.getsize(file_path)
+        part_number = 1
+        part_files = []
+        file_basename = os.path.basename(file_path)
+    
+        with open(file_path, "rb") as f:
+            while chunk := f.read(chunk_size):
+                part_filename = os.path.join(output_dir, f"{file_basename}.part{part_number}")
+
+                with open(part_filename, "wb") as part_file:
+                    part_file.write(chunk)
+                print(f"Created: {part_filename}")
+                part_files.append(part_filename)
+                part_number += 1
+        return part_files
+
     def load_model(self, model_path) -> None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        print(base_dir)
-        parts = [
-            os.path.join(base_dir, "models", "LSTM", "model_weights.h5.part1"),
-            os.path.join(base_dir, "models", "LSTM", "model_weights.h5.part2")
-        ]
+        tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
+        config_path = os.path.join(model_path, "LSTM_config.json")
+        weight_parts_dir = os.path.join(model_path, "weight_parts")
+        merged_path = os.path.join(model_path, "merged_weights.h5")
+
+        if not os.path.exists(tokenizer_path):
+            raise FileNotFoundError(f"Tokenizer file not found at {tokenizer_path}")
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Model config file not found at {config_path}")
+
+        with open(tokenizer_path, "rb") as handle:
+            self.tokenizer = pickle.load(handle)
+
+        with open(config_path, "r") as f:
+            loaded_dimensions = json.load(f)
+            self.vocab_size = loaded_dimensions["vocab_size"]
+            self.max_length = loaded_dimensions["max_length"]
+
+        if not os.path.exists(merged_path):
+            if not os.path.exists(weight_parts_dir):
+                raise FileNotFoundError(f"Weight parts directory not found at {weight_parts_dir}")
+            self._merge_files(merged_path, [os.path.join(weight_parts_dir, f) for f in os.listdir(weight_parts_dir)])
+        self.model = self.build_model()
+        self.model.load_weights(merged_path)
+        print("Model weights loaded successfully")
         
-        # Debug information
-        print(f"Looking for model files at: {parts}")
-        exists = [os.path.exists(p) for p in parts]
-        print(f"Files exist: {exists}")
+    def save_model(self, model_path) -> None:
+        # base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full_path = os.path.join(model_path, "model_weights.h5")
+        self.model.save_weights(full_path)
+        weight_parts_dir = os.path.join(model_path, "weight_parts")
+        if not os.path.exists(weight_parts_dir):
+            os.makedirs(weight_parts_dir)
+        self._split_file(full_path, weight_parts_dir)
         
-        if all(exists):
-            try:
-                # First build the model architecture
-                # We need a dummy sequence length and vocabulary size to build the model
-                # Build the model with the same architecture
-                self.vocab_size = 134610
-                self.max_length = 8389
-                self.model = self.build_model()
-                
-                # Merge the weight files
-                merged_path = os.path.join(base_dir, "models", "LSTM", "model_weights.h5")
-                self._merge_files(merged_path, parts)
-                
-                # Load just the weights
-                self.model.load_weights(merged_path)
-                print("Model weights loaded successfully")
-            except Exception as e:
-                print(f"Error loading model weights: {e}")
-                raise
-        else:
-            missing_files = [p for p, e in zip(parts, exists) if not e]
-            raise FileNotFoundError(f"Model files not found: {missing_files}")
+        tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
+        with open(tokenizer_path, "wb") as handle:
+            pickle.dump(self.tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        cfg_path = os.path.join(model_path, "LSTM_config.json")
+        with open(cfg_path, "w") as f:
+            model_dimensions = {"vocab_size": self.vocab_size, "max_length": self.max_length}
+            json.dump(model_dimensions, f)
     
     def train(self, x_train, x_val, y_train, y_val) -> None:
         """Tokenize data, build and train the LSTM model.
@@ -243,7 +270,7 @@ class LSTMClassifier:
         raw_predictions = self.model.predict(test_seq, verbose=verbose)
         
         # Convert probabilities to binary predictions
-        binary_predictions = (raw_predictions > threshold).astype(int)
+        binary_predictions = (raw_predictions < threshold).astype(int)
         
         # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
         if binary_predictions.ndim > 1 and binary_predictions.shape[1] == 1:

@@ -73,18 +73,15 @@ def plot_precision_recall_curve(y_true, y_prob, save_path=None):
         plt.savefig(f"{save_path}_pr_curve.png")
     plt.show()
 
-def main(model_path, save_plots=None):
+def eval_text_classifier(model_path, save_plots=None):
     """Evaluate model and visualize results
 
     Args:
         model_path (str): Path to the trained model
         save_plots (str, optional): Path prefix for saving plots (default: None)
     """
-    if model_path == "LSTM":
-        train_df, val_df, test_df = dataset_split(ratio=(0.95, 0.04, 0.01))
-    else:
-        train_df, val_df, test_df = dataset_split()
-    model = LSTMClassifier() if model_path=="LSTM" else TextClassifier()
+    train_df, val_df, test_df = dataset_split()
+    model = TextClassifier()
     model.load_model(model_path)
     y_true = test_df['label']
     y_pred = model.predict(test_df['text'])
@@ -100,10 +97,33 @@ def main(model_path, save_plots=None):
     plot_precision_recall_curve(y_true, y_prob, save_plots)
 
 
+def eval_LSTM_classifier(model_path, save_plots=None):
+    """Evaluate LSTM model and visualize results
+
+    Args:
+        model_path (str): Path to the trained model
+        save_plots (str, optional): Path prefix for saving plots (default: None)
+    """
+    train_df, val_df, test_df = dataset_split(ratio=(0.95, 0.04, 0.01))
+    model = LSTMClassifier()
+    model.load_model(model_path)
+    y_true = test_df['label']
+    y_pred = model.predict(test_df['text'])
+    y_prob = model.predict_proba(test_df['text'])[:, 1] 
+    acc = accuracy_score(y_true, y_pred)
+    print("\n=== Model Performance ===")
+    print(f"Accuracy: {acc:.4f}")
+    print("\n=== Detailed Classification Report ===")
+    print(classification_report(y_true, y_pred))
+    print("\n=== Visualization Results ===")
+    plot_confusion_matrix(y_true, y_pred, save_plots)
+    plot_roc_curve(y_true, y_prob, save_plots)
+    plot_precision_recall_curve(y_true, y_prob, save_plots)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, default="naive-bayes")
     parser.add_argument("--model_path", type=str, default="model.pkl")
     parser.add_argument("--save_plots", type=str, help="Path prefix for saving plots")
     args = parser.parse_args()

@@ -1,11 +1,11 @@
 import argparse
 import joblib
 from data_loader import dataset_split
-from model import TextClassifier
+from model import TextClassifier, LSTMClassifier
 from preprocess import preprocess_raw
 import os
 
-def main(model_name, tokenizer_name, save_path):
+def train_text_classifier(model_name, tokenizer_name, save_path):
     """train a model and save it to a file
 
     Args:
@@ -19,6 +19,17 @@ def main(model_name, tokenizer_name, save_path):
     y_train = train_df['label']
     model.train(X_train, y_train)
     joblib.dump(model, save_path)
+
+
+def train_LSTM_classifier(save_path):
+    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
+    model = LSTMClassifier()
+    train_df['total_text'] = train_df['title'] + "\n" + train_df['text']
+    X_train = train_df['total_text']
+    y_train = train_df['label']
+    model.train(X_train, y_train)
+    model.save_model(save_path)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -1,11 +1,13 @@
 import data_loader
 import pandas as pd
+
+
 def preprocess_raw(new_path='../raw'):
     """read raw data, remove NaN columns and drop duplicates from text OR title columns, then save to given path
 
     Args:
         new_path (str, optional): path to save cleaned files. Defaults to 'raw'.
-    """    
+    """
     path = data_loader.download()
 
     # Process Fake

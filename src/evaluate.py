@@ -104,7 +104,7 @@ def eval_LSTM_classifier(model_path, save_plots=None):
         model_path (str): Path to the trained model
         save_plots (str, optional): Path prefix for saving plots (default: None)
     """
-    train_df, val_df, test_df = dataset_split(ratio=(0.95, 0.04, 0.01))
+    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
     model = LSTMClassifier()
     model.load_model(model_path)
     y_true = test_df['label']
@@ -127,4 +127,4 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="model.pkl")
     parser.add_argument("--save_plots", type=str, help="Path prefix for saving plots")
     args = parser.parse_args()
-    main(args.model_path, args.save_plots)
+    main(args.model_name, args.model_path, args.save_plots)

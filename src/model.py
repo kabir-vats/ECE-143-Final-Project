@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
@@ -103,19 +104,6 @@ class TextClassifier:
         """
         return self.pipeline.predict_proba(X_test)
 
-    def evaluate(self, X_test, y_test):
-        """Evaluate model with test data
-
-        Args:
-            X_test: Test data
-            y_test: Test data labels
-
-        Returns:
-            Float: acc score
-        """       
-        y_pred = self.predict(X_test)
-        return accuracy_score(y_test, y_pred)
-
 
 class LSTMClassifier:
     """
@@ -185,20 +173,41 @@ class LSTMClassifier:
                 with open(part, "rb") as f:
                     out.write(f.read())
 
-    def load_model(self, path: str) -> None:
-        if os.path.exists(path):
-            self.model = load_model(path)
-        else:
-            parts = [
-                "../models/best_model_h5.part1",
-                "../models/best_model_h5.part2"
-            ]
-            if all(os.path.exists(p) for p in parts):
-                merged_path = "../models/best_model.h5"
+    def load_model(self, model_path) -> None:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        print(base_dir)
+        parts = [
+            os.path.join(base_dir, "models", "LSTM", "model_weights.h5.part1"),
+            os.path.join(base_dir, "models", "LSTM", "model_weights.h5.part2")
+        ]
+        
+        # Debug information
+        print(f"Looking for model files at: {parts}")
+        exists = [os.path.exists(p) for p in parts]
+        print(f"Files exist: {exists}")
+        
+        if all(exists):
+            try:
+                # First build the model architecture
+                # We need a dummy sequence length and vocabulary size to build the model
+                # Build the model with the same architecture
+                self.vocab_size = 134610
+                self.max_length = 8389
+                self.model = self.build_model()
+                
+                # Merge the weight files
+                merged_path = os.path.join(base_dir, "models", "LSTM", "model_weights.h5")
                 self._merge_files(merged_path, parts)
-                self.model = load_model(merged_path)
-            else:
-                raise FileNotFoundError("Model file not found and model parts are missing.")
+                
+                # Load just the weights
+                self.model.load_weights(merged_path)
+                print("Model weights loaded successfully")
+            except Exception as e:
+                print(f"Error loading model weights: {e}")
+                raise
+        else:
+            missing_files = [p for p, e in zip(parts, exists) if not e]
+            raise FileNotFoundError(f"Model files not found: {missing_files}")
     
     def train(self, x_train, x_val, y_train, y_val) -> None:
         """Tokenize data, build and train the LSTM model.
@@ -219,31 +228,49 @@ class LSTMClassifier:
                        validation_data=(val_seq, y_val),
                        callbacks=[callback_es, callback_rlr, callback_cp])
     
-    def predict(self, X_test):
+    def predict(self, X_test, threshold=0.5, verbose=1):
         """Make predictions using the trained model.
 
         Args:
             X_test: Test texts.
+            threshold: Classification threshold (default 0.5)
+            verbose: Whether to display progress bars (default 1)
 
         Returns:
-            Predictions from the model.
+            Binary predictions from the model.
         """
         test_seq = self.get_seq(X_test)
-        return self.model.predict(test_seq)
-    
-    def evaluate(self, X_test, y_test):
-        """Evaluate the model on test data.
+        raw_predictions = self.model.predict(test_seq, verbose=verbose)
+        
+        # Convert probabilities to binary predictions
+        binary_predictions = (raw_predictions > threshold).astype(int)
+        
+        # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
+        if binary_predictions.ndim > 1 and binary_predictions.shape[1] == 1:
+            binary_predictions = binary_predictions.flatten()
+            
+        return binary_predictions
 
+    def predict_proba(self, X_test, verbose=1):
+        """Get probability scores.
+        
         Args:
             X_test: Test texts.
-            y_test: True labels.
-
+            verbose: Whether to display progress bars (default 1)
+            
         Returns:
-            Accuracy score.
+            Probability scores from the model.
         """
         test_seq = self.get_seq(X_test)
-        y_pred = self.model.predict(test_seq)
-        return accuracy_score(y_test, y_pred)
+        probas = self.model.predict(test_seq, verbose=verbose)
+        
+        # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
+        if probas.ndim > 1 and probas.shape[1] == 1:
+            probas = probas.flatten()
+        
+        # Convert to scikit-learn expected format (n_samples, n_classes)
+        # For binary classification, create array with [1-p, p] for each prediction
+        return np.vstack((1-probas, probas)).T
 
 
 

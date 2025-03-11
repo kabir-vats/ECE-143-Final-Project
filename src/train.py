@@ -22,7 +22,7 @@ def train_text_classifier(model_name, tokenizer_name, save_path):
 
 
 def train_LSTM_classifier(save_path):
-    train_df, val_df, test_df = dataset_split(ratio=(0.02, 0.02, 0.96))
+    train_df, val_df, test_df = dataset_split(ratio=(0.1, 0.1, 0.8))
     model = LSTMClassifier()
     X_train = train_df['text']
     y_train = train_df['label']
@@ -38,4 +38,4 @@ if __name__ == "__main__":
     parser.add_argument("--tokenizer_name", type=str, default="tfidf")
     parser.add_argument("--save_path", type=str, default="model.pkl")
     args = parser.parse_args()
-    main(args.model_name, args.tokenizer_name, args.save_path)
+    train_LSTM_classifier(args.save_path) if args.model_name == "LSTM" else train_text_classifier(args.model_name, args.tokenizer_name, args.save_path)

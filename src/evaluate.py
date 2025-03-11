@@ -127,4 +127,4 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, default="model.pkl")
     parser.add_argument("--save_plots", type=str, help="Path prefix for saving plots")
     args = parser.parse_args()
-    main(args.model_name, args.model_path, args.save_plots)
+    eval_LSTM_classifier(args.model_path, args.save_plots) else eval_text_classifier(args.model_path, args.save_plots)

@@ -114,7 +114,7 @@ class LSTMClassifier:
     """
 
     def __init__(self):
-        # Initialize tokenizer and model attributes
+        """Initialize the LSTM classifier."""
         self.tokenizer = Tokenizer()
         self.model = None
         self.max_length = None
@@ -144,7 +144,11 @@ class LSTMClassifier:
         return pad_sequences(train_seq, maxlen=self.max_length, padding='post', truncating='post')
     
     def get_seq(self, text: pd.DataFrame) -> pd.DataFrame:
-        """Convert text to padded sequences."""
+        """Convert text to padded sequences.
+        
+        Args:
+            text: Text data to convert.
+        """
         seq = self.tokenizer.texts_to_sequences(text)
         return pad_sequences(seq, maxlen=self.max_length, padding='post', truncating='post')
     
@@ -169,12 +173,25 @@ class LSTMClassifier:
         return model
     
     def _merge_files(self, output_file: str, parts: list) -> None:
+        """Merge parts of a file into a single file.
+
+        Args:
+            output_file: Path to save the merged file.
+            parts: List of paths to the parts.
+        """
         with open(output_file, "wb") as out:
             for part in sorted(parts, key=lambda x: int(x.split("part")[-1])):
                 with open(part, "rb") as f:
                     out.write(f.read())
 
     def _split_file(self, file_path, output_dir, chunk_size=90 * 1024 * 1024): 
+        """Split a file into parts.
+
+        Args:
+            file_path: Path to the file to split.
+            output_dir: Directory to save the parts.
+            chunk_size: Size of each part in bytes (default 90MB).
+        """
         file_size = os.path.getsize(file_path)
         part_number = 1
         part_files = []
@@ -189,7 +206,6 @@ class LSTMClassifier:
                 print(f"Created: {part_filename}")
                 part_files.append(part_filename)
                 part_number += 1
-        return part_files
 
     def load_model(self, model_path) -> None:
         tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
@@ -219,7 +235,11 @@ class LSTMClassifier:
         print("Model weights loaded successfully")
         
     def save_model(self, model_path) -> None:
-        # base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        """ Save model weights and tokenizer to disk.
+
+        Args:
+            model_path: Path to save the model.
+        """
         full_path = os.path.join(model_path, "model_weights.h5")
         self.model.save_weights(full_path)
         weight_parts_dir = os.path.join(model_path, "weight_parts")
@@ -298,8 +318,3 @@ class LSTMClassifier:
         # Convert to scikit-learn expected format (n_samples, n_classes)
         # For binary classification, create array with [1-p, p] for each prediction
         return np.vstack((1-probas, probas)).T
-
-
-
-
-

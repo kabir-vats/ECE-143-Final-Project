@@ -209,6 +209,11 @@ class LSTMClassifier:
                 part_number += 1
 
     def load_model(self, model_path) -> None:
+        """Load a model from a path (needs to be chunked through the save_model)
+
+        Args: 
+            model_path: path to the model
+        """
         tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
         config_path = os.path.join(model_path, "LSTM_config.json")
         weight_parts_dir = os.path.join(model_path, "weight_parts")

@@ -12,8 +12,13 @@ def preprocess_raw(new_path='../raw'):
 
     # Process Fake
     fake_raw = pd.read_csv(path+'/Fake.csv', keep_default_na=False)
-    fake_raw['text'] = fake_raw['text'].astype(str).str.strip() 
+    fake_raw['text'] = fake_raw['text'].astype(str).str.strip()
+
+    fake_raw['text'] = fake_raw['text'].apply(lambda x: x[x.find(" - ")+3:] if isinstance(x, str) and x.find(" - ") != -1 and x.find(" - ") < 100 else x)
+    
     fake_raw['text'] = fake_raw['text'].replace(r'^\s*$', float('nan'), regex=True)
+    
+    
     fake_raw.dropna(subset=["text"], inplace=True)
 
     fake_raw['title'] = fake_raw['title'].astype(str).str.strip()
@@ -28,6 +33,9 @@ def preprocess_raw(new_path='../raw'):
     true_raw = pd.read_csv(path+'/True.csv', keep_default_na=False)
 
     true_raw['text'] = true_raw['text'].astype(str).str.strip()
+
+    true_raw['text'] = fake_raw['text'].apply(lambda x: x[x.find(" - ")+3:] if isinstance(x, str) and x.find(" - ") != -1 and x.find(" - ") < 100 else x)
+    
     true_raw['text'] = true_raw['text'].replace(r'^\s*$', float('nan'), regex=True)
     true_raw.dropna(subset=["text"], inplace=True)
 

@@ -104,7 +104,7 @@ def eval_LSTM_classifier(model_path, save_plots=None):
         model_path (str): Path to the trained model
         save_plots (str, optional): Path prefix for saving plots (default: None)
     """
-    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
+    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.19, 0.01))
     model = LSTMClassifier()
     model.load_model(model_path)
     y_true = test_df['label']

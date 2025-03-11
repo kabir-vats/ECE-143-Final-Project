@@ -179,6 +179,7 @@ class LSTMClassifier:
             output_file: Path to save the merged file.
             parts: List of paths to the parts.
         """
+        print("Merging weights files")
         with open(output_file, "wb") as out:
             for part in sorted(parts, key=lambda x: int(x.split("part")[-1])):
                 with open(part, "rb") as f:
@@ -226,10 +227,7 @@ class LSTMClassifier:
             self.vocab_size = loaded_dimensions["vocab_size"]
             self.max_length = loaded_dimensions["max_length"]
 
-        if not os.path.exists(merged_path):
-            if not os.path.exists(weight_parts_dir):
-                raise FileNotFoundError(f"Weight parts directory not found at {weight_parts_dir}")
-            self._merge_files(merged_path, [os.path.join(weight_parts_dir, f) for f in os.listdir(weight_parts_dir)])
+        self._merge_files(merged_path, [os.path.join(weight_parts_dir, f) for f in os.listdir(weight_parts_dir)])
         self.model = self.build_model()
         self.model.load_weights(merged_path)
         print("Model weights loaded successfully")
@@ -271,7 +269,7 @@ class LSTMClassifier:
         callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=2, restore_best_weights=True)
         callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, mode='min')
         callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
-        self.model.fit(train_seq, y_train, epochs=4, batch_size=64,
+        self.model.fit(train_seq, y_train, epochs=4, batch_size=32,
                        validation_data=(val_seq, y_val),
                        callbacks=[callback_es, callback_rlr, callback_cp])
     
@@ -290,7 +288,7 @@ class LSTMClassifier:
         raw_predictions = self.model.predict(test_seq, verbose=verbose)
         
         # Convert probabilities to binary predictions
-        binary_predictions = (raw_predictions < threshold).astype(int)
+        binary_predictions = (raw_predictions > threshold).astype(int)
         
         # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
         if binary_predictions.ndim > 1 and binary_predictions.shape[1] == 1:

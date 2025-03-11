@@ -22,12 +22,13 @@ def train_text_classifier(model_name, tokenizer_name, save_path):
 
 
 def train_LSTM_classifier(save_path):
-    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
+    train_df, val_df, test_df = dataset_split(ratio=(0.02, 0.02, 0.96))
     model = LSTMClassifier()
-    train_df['total_text'] = train_df['title'] + "\n" + train_df['text']
-    X_train = train_df['total_text']
+    X_train = train_df['text']
     y_train = train_df['label']
-    model.train(X_train, y_train)
+    X_val = val_df['text']
+    y_val = val_df['label']
+    model.train(X_train, X_val, y_train, y_val)
     model.save_model(save_path)
 
 

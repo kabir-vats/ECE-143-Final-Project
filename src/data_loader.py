@@ -1,12 +1,13 @@
-import kagglehub
 import pandas as pd
 from sklearn.model_selection import train_test_split
+
 def download()->str:
     """download dataset raw data from kaggle
 
     Returns:
         str: path of downloaded file
     """
+    import kagglehub # Lazy loaded because it can't import on some jupyter environments
     path = kagglehub.dataset_download("clmentbisaillon/fake-and-real-news-dataset")
     return path
 

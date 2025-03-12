@@ -20,6 +20,9 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, Input, Embedding, LSTM, Dropout, Bidirectional
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
+import nltk
+from nltk.stem.porter import PorterStemmer
+from nltk.corpus import stopwords
 
 
 class TextClassifier:
@@ -121,7 +124,7 @@ class LSTMClassifier:
         self.vocab_size = None
 
     def preprocess_text(self, text: pd.DataFrame) -> pd.DataFrame:
-        """Preprocess text data.
+        """Preprocess text data. Remove stop words
 
         Args:
             text (pd.DataFrame): Text data to preprocess.
@@ -129,11 +132,20 @@ class LSTMClassifier:
         Returns:
             pd.DataFrame: Preprocessed text data.
         """
-        return (text.lower()
+        ps = PorterStemmer()
+        nltk.download('stopwords')
+        stop_words = set(stopwords.words('english'))
+        text = (text.lower()
                 .replace('[^a-zA-Z]', ' ')
                 .replace('\s+', ' ')
                 .replace(r'https?://\S+|www\.\S+|[^a-zA-Z\s]', '')
-                .replace(r'<.*?>', ''))
+                .replace(r'<.*?>', '')
+               )
+        text = text.split()
+        text = [ps.stem(word) for word in text if word not in stop_words]
+        text = " ".join(text)
+        
+        return text
 
     def tokenize_text(self, x_train: pd.DataFrame) -> pd.DataFrame:
         """Tokenize text and update tokenizer parameters."""
@@ -170,6 +182,7 @@ class LSTMClassifier:
             Dense(1, activation='sigmoid')
         ])
         model.compile(optimizer=Adam(learning_rate=lr), loss=BinaryCrossentropy(), metrics=['accuracy'])
+        model.summary()
         return model
     
     def _merge_files(self, output_file: str, parts: list) -> None:
@@ -268,6 +281,8 @@ class LSTMClassifier:
             y_train: Training labels.
             y_val: Validation labels.
         """
+        x_train = self.preprocess_text(x_train)
+        x_val = self.preprocess_text(x_val)
         train_seq = self.tokenize_text(x_train)
         val_seq = self.get_seq(x_val)
         self.model = self.build_model()
@@ -279,7 +294,7 @@ class LSTMClassifier:
                        callbacks=[callback_es, callback_rlr, callback_cp])
         return history
     
-    def predict(self, X_test, threshold=0.5, verbose=1):
+    def predict(self, x_test, threshold=0.5, verbose=1):
         """Make predictions using the trained model.
 
         Args:
@@ -290,7 +305,8 @@ class LSTMClassifier:
         Returns:
             Binary predictions from the model.
         """
-        test_seq = self.get_seq(X_test)
+        x_test = self.preprocess_text(x_test)
+        test_seq = self.get_seq(x_test)
         raw_predictions = self.model.predict(test_seq, verbose=verbose)
         
         # Convert probabilities to binary predictions
@@ -302,7 +318,7 @@ class LSTMClassifier:
             
         return binary_predictions
 
-    def predict_proba(self, X_test, verbose=1):
+    def predict_proba(self, x_test, verbose=1):
         """Get probability scores.
         
         Args:
@@ -312,7 +328,8 @@ class LSTMClassifier:
         Returns:
             Probability scores from the model.
         """
-        test_seq = self.get_seq(X_test)
+        x_test = self.preprocess_text(x_test)
+        test_seq = self.get_seq(x_test)
         probas = self.model.predict(test_seq, verbose=verbose)
         
         # If predictions are in shape (n_samples, 1), flatten to (n_samples,)

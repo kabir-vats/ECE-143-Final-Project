@@ -20,15 +20,24 @@ def train_text_classifier(model_name, tokenizer_name, save_path):
     model.train(X_train, y_train)
     joblib.dump(model, save_path)
 
+def plot_LSTM_loss(history, save_path):
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.xlabel('epochs')
+    plt.ylabel('accuracy')
+    plt.legend(['Train' ,"test"])
+    plt.savefig(f"{save_path}_training_curve.png")
+    plt.show()
+
 
 def train_LSTM_classifier(save_path):
-    train_df, val_df, test_df = dataset_split(ratio=(0.1, 0.1, 0.8))
+    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
     model = LSTMClassifier()
     X_train = train_df['text']
     y_train = train_df['label']
     X_val = val_df['text']
     y_val = val_df['label']
-    model.train(X_train, X_val, y_train, y_val)
+    model_history = model.train(X_train, X_val, y_train, y_val)
     model.save_model(save_path)
 
 

@@ -274,9 +274,10 @@ class LSTMClassifier:
         callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=2, restore_best_weights=True)
         callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, mode='min')
         callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
-        self.model.fit(train_seq, y_train, epochs=4, batch_size=32,
+        history = self.model.fit(train_seq, y_train, epochs=4, batch_size=32,
                        validation_data=(val_seq, y_val),
                        callbacks=[callback_es, callback_rlr, callback_cp])
+        return history
     
     def predict(self, X_test, threshold=0.5, verbose=1):
         """Make predictions using the trained model.

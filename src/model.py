@@ -23,6 +23,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelChe
 import nltk
 from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
+from tqdm import tqdm
 
 
 class TextClassifier:
@@ -122,6 +123,10 @@ class LSTMClassifier:
         self.model = None
         self.max_length = None
         self.vocab_size = None
+        self.ps = PorterStemmer()
+        nltk.download('stopwords')
+        self.stop_words = set(stopwords.words('english'))
+
 
     def preprocess_text(self, text: pd.DataFrame) -> pd.DataFrame:
         """Preprocess text data. Remove stop words
@@ -132,9 +137,6 @@ class LSTMClassifier:
         Returns:
             pd.DataFrame: Preprocessed text data.
         """
-        ps = PorterStemmer()
-        nltk.download('stopwords')
-        stop_words = set(stopwords.words('english'))
         text = (text.lower()
                 .replace('[^a-zA-Z]', ' ')
                 .replace('\s+', ' ')
@@ -142,17 +144,21 @@ class LSTMClassifier:
                 .replace(r'<.*?>', '')
                )
         text = text.split()
-        text = [ps.stem(word) for word in text if word not in stop_words]
+        text = [self.ps.stem(word) for word in text if word not in self.stop_words]
         text = " ".join(text)
         
         return text
 
     def tokenize_text(self, x_train: pd.DataFrame) -> pd.DataFrame:
         """Tokenize text and update tokenizer parameters."""
+        self.tokenizer = Tokenizer(num_words = 5000)
         self.tokenizer.fit_on_texts(x_train)
+        print('hh')
         train_seq = self.tokenizer.texts_to_sequences(x_train)
+        print('charo')
         self.vocab_size = len(self.tokenizer.word_index) + 1
         self.max_length = max(len(sequence) for sequence in train_seq)
+        print('here')
         return pad_sequences(train_seq, maxlen=self.max_length, padding='post', truncating='post')
     
     def get_seq(self, text: pd.DataFrame) -> pd.DataFrame:
@@ -281,11 +287,16 @@ class LSTMClassifier:
             y_train: Training labels.
             y_val: Validation labels.
         """
-        x_train = self.preprocess_text(x_train)
-        x_val = self.preprocess_text(x_val)
+        tqdm.pandas()
+        x_train = x_train.progress_apply(self.preprocess_text)
+        x_val = x_val.progress_apply(self.preprocess_text)
+        print('debug')
         train_seq = self.tokenize_text(x_train)
+        print('1')
         val_seq = self.get_seq(x_val)
+        print('2')
         self.model = self.build_model()
+        print('3')
         callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=2, restore_best_weights=True)
         callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, mode='min')
         callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
@@ -305,7 +316,7 @@ class LSTMClassifier:
         Returns:
             Binary predictions from the model.
         """
-        x_test = self.preprocess_text(x_test)
+        x_test = x_test.progress_apply(self.preprocess_text)
         test_seq = self.get_seq(x_test)
         raw_predictions = self.model.predict(test_seq, verbose=verbose)
         

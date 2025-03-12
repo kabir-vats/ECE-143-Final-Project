@@ -31,7 +31,7 @@ def plot_LSTM_loss(history, save_path):
 
 
 def train_LSTM_classifier(save_path):
-    train_df, val_df, test_df = dataset_split(ratio=(0.8, 0.1, 0.1))
+    train_df, val_df, test_df = dataset_split(ratio=(0.1, 0.1, 0.8))
     model = LSTMClassifier()
     X_train = train_df['text']
     y_train = train_df['label']

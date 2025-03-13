@@ -74,11 +74,16 @@ def analyze_news(title: str, text: str, date: str, model:str) -> dict:
         }
 
 if __name__ == "__main__":
+
+    #Test
+
+    import pprint
     sample = {
-        'title':'Scientists Invent Faster-than-light Engine',
-        'text': 'NASA decleared that their scientists designed and tested the first fast-than-light engine in the world, which reached up to three times the speed of light.',
+        'title': 'Scientists Invent Faster-than-Light Engine',
+        'text': 'NASA declared that their scientists designed and tested the first faster-than-light engine '
+        'in the world, which reached speeds up to three times the speed of light.',
         'date': 'March 10, 2024',
-        'model': 'deepseek'
+        'model': 'llama'
     }
 
-    print(analyze_news(**sample))
+    pprint.pprint(analyze_news(**sample))

@@ -87,8 +87,8 @@ def eval_text_classifier(model_name, model_path, save_plots=None):
     model = TextClassifier()
     model.load_model(model_path)
     y_true = test_df['label']
-    y_pred = model.predict(test_df['text'])
-    y_prob = model.predict_proba(test_df['text'])[:, 1] 
+    y_pred = model.predict(test_df['title'])
+    y_prob = model.predict_proba(test_df['title'])[:, 1] 
     acc = accuracy_score(y_true, y_pred)
     print("\n=== Model Performance ===")
     print(f"Accuracy: {acc:.4f}")

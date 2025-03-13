@@ -17,7 +17,7 @@ def train_text_classifier(model_name, tokenizer_name, save_path):
     """    
     train_df, val_df, test_df = dataset_split()
     model = TextClassifier(model_name, tokenizer_name)
-    X_train = train_df['text']
+    X_train = train_df['title']
     y_train = train_df['label']
     model.train(X_train, y_train)
     joblib.dump(model, save_path)

@@ -1,0 +1,5 @@
+{
+    "openai": "<Your openai api key>",
+    "deepseek": "<Your deepseek api key>",
+    "groq": "<Your groq api key>"
+}

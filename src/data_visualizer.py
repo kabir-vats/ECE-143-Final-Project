@@ -1,0 +1,302 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import umap
+import spacy
+import nltk
+import string
+
+from nltk.corpus import stopwords
+from collections import Counter
+
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from gensim.models import Word2Vec
+from sklearn.decomposition import TruncatedSVD, PCA, LatentDirichletAllocation
+from sklearn.manifold import TSNE
+from wordcloud import WordCloud
+from util import  RAW_DATA_DIR, VISUALIZATION_DIR
+
+nltk.download('stopwords')
+stop_words = set(stopwords.words('english'))
+
+class DataVisualizer:
+    """
+    A class for visualizing text-based datasets, particularly for fake news detection.
+    It supports subject distribution, text length analysis, word frequency, 
+    TF-IDF analysis, Word2Vec, and LDA topic modeling.
+    """
+
+    def __init__(self, raw_dir = RAW_DATA_DIR, output_dir=VISUALIZATION_DIR):
+        """
+        Initializes the DataVisualizer.
+
+        Args:
+            df (pd.DataFrame): The input DataFrame containing at least 'text', 'subject', and 'true/false' columns.
+            output_dir (str): Directory to save generated plots.
+        """
+        self.output_dir = output_dir
+        self.df_true = pd.read_csv(raw_dir+'/Fake.csv')
+        self.df_false = pd.read_csv(raw_dir+'/True.csv')
+
+        self.df_false["label"] = False
+        self.df_true["label"] = True
+        self.df_false['title_length'] = self.df_false['title'].apply(lambda x : len(x.strip().split()))
+        self.df_true['title_length'] = self.df_true['title'].apply(lambda x : len(x.strip().split()))
+        self.df_false['text_length'] = self.df_false['text'].apply(lambda x: len(x.split()))
+        self.df_true['text_length'] = self.df_true['text'].apply(lambda x: len(x.split()))
+        self.df_false['date'] = pd.to_datetime(self.df_false['date'], errors='coerce')
+        self.df_true['date'] = pd.to_datetime(self.df_true['date'], errors='coerce')
+        self.df = pd.concat([self.df_true, self.df_false], ignore_index=True)
+        
+
+        for label in ["Overall", "Compare","True", "False"]:
+            os.makedirs(os.path.join(self.output_dir, label), exist_ok=True)
+
+        self.nlp = spacy.load('en_core_web_lg', disable=["parser", "tagger", "ner", "textcat"])
+
+    def save_plot(self, filename: str, label='Overall'):
+        """
+        Saves the current plot to the specified output directory.
+
+        Args:
+            filename (str): The filename to save the plot.
+            label (str): The dataset type ("Overall", "True", or "False").
+        """
+        assert label in ["Overall","Compare", "True", "False"], "label must be 'Overall', 'True', or 'False'."
+        
+        filepath = os.path.join(self.output_dir, label, filename)
+        plt.savefig(filepath, bbox_inches='tight')
+        print(f"Saved plot: {filepath}")
+        plt.close()
+
+    def plot_title_length_distribution(self):
+        plt.figure(figsize=(12,6))
+        sns.histplot(self.df_true['title_length'], 
+                    kde=False, label='Fake', bins=50, color='blue', alpha=0.5)
+        sns.histplot(self.df_false['title_length'], 
+                    kde=False, label='True', bins=50, color='orange',alpha=0.5)
+        plt.xlabel('Title Length', weight='bold')
+        plt.title('Length of title comparison', weight='bold')
+        self.save_plot("title_length_distribution.png", 'Compare')
+
+    def plot_subject_distribution(self):
+        """Plots and saves the distribution of subjects separately for True, False, and Overall data."""
+        for label, data in zip(["Overall", "True", "False"], [self.df, self.df_true, self.df_false]):
+            plt.figure(figsize=(12, 6))
+            sns.countplot(y=data['subject'], order=data['subject'].value_counts().index, palette='viridis')
+            plt.xlabel("Count")
+            plt.ylabel("Subject")
+            plt.title(f"Distribution of Subjects ({label})")
+            self.save_plot("subject_distribution.png", label)
+        plt.figure(figsize=(12, 6))
+        sns.countplot(y=self.df_true['subject'], order=self.df_true['subject'].value_counts().index,color='blue', alpha=0.5)
+        sns.countplot(y=self.df_false['subject'], order=self.df_false['subject'].value_counts().index,color='orange', alpha=0.5)
+        plt.xlabel("Count")
+        plt.ylabel("Subject")
+        plt.title(f"Distribution of Subjects (Compare)")
+        self.save_plot("subject_distribution.png", 'Compare')
+
+    def plot_text_length_distribution(self):
+        """Plots and saves the distribution of text lengths separately for True, False, and Overall data."""
+        plt.figure(figsize=(12,6))
+        sns.histplot(self.df_true['text_length'], 
+                    kde=False, label='Fake', bins=50, color='blue', alpha=0.5)
+        sns.histplot(self.df_false['text_length'], 
+                    kde=False, label='True', bins=50, color='orange',alpha=0.5)
+        plt.xlabel('Text Length', weight='bold')
+        plt.title('Length of Text comparison', weight='bold')
+        self.save_plot("Text_length_distribution.png", 'Compare')
+
+    def count_nouns_and_prop_nouns(self,text):
+        """ Return number of nouns and proper nouns in text """
+        doc = self.nlp(text)
+        pos = [token.pos_ for token in doc]
+        return pos.count('NOUN'), pos.count('PROPN')
+
+
+    def plot_word_frequency(self, top_n=20):
+        """
+        Plots and saves the most common words separately for True, False, and Overall data.
+
+        Args:
+            top_n (int): Number of top words to display.
+        """
+        assert isinstance(top_n, int) and top_n > 0, "top_n must be a positive integer."
+
+        for label, data in zip(["Overall", "True", "False"], [self.df, self.df_true, self.df_false]):
+            words = []
+            for text in data['text']:
+                words.extend(self.clean_text(text))
+
+            word_freq = Counter(words)
+            common_words = word_freq.most_common(top_n)
+
+            df_freq = pd.DataFrame(common_words, columns=['Word', 'Frequency'])
+            plt.figure(figsize=(12, 6))
+            sns.barplot(x='Frequency', y='Word', data=df_freq, palette='viridis')
+            plt.title(f"Top {top_n} Most Common Words ({label})")
+            self.save_plot("word_frequency.png", label)
+
+    def generate_wordcloud(self):
+        """Generates and saves a word cloud visualization separately for True, False, and Overall data."""
+        for label, data in zip(["Overall", "True", "False"], [self.df, self.df_true, self.df_false]):
+            text = " ".join(data['text'])
+            wordcloud = WordCloud(stopwords=stop_words, background_color="white", width=800, height=400).generate(text)
+
+            plt.figure(figsize=(10, 5))
+            plt.imshow(wordcloud, interpolation="bilinear")
+            plt.axis("off")
+            plt.title(f"Word Cloud ({label})")
+            self.save_plot("word_cloud.png", label)
+
+    def plot_time_series(self):
+        """Plot the number of articles over time for True and Fake news in the same plot."""
+        df_true_time = self.df.groupby([self.df_true['date'].dt.to_period('M'), 'label']).size().reset_index(name='count')
+        df_false_time = self.df.groupby([self.df_false['date'].dt.to_period('M'), 'label']).size().reset_index(name='count')
+
+        plt.figure(figsize=(12, 5))
+        sns.lineplot(x=df_true_time['date'].astype(str), y=df_true_time['count'], label='True', marker='o',color='blue')
+        sns.lineplot(x=df_false_time['date'].astype(str), y=df_false_time['count'], label='False', marker='o',color='orange')
+        plt.xticks(rotation=45)
+        plt.xlabel("Date")
+        plt.ylabel("Number of Articles")
+        plt.title("Article Count Over Time (True vs. Fake)")
+        self.save_plot("Time_series.png", 'Compare')
+
+    def plot_radar_chart(self):
+        """
+        Plot the radar chart
+        """
+        categories = ["Word Count", "Unique Word Count", "Sentence Count", "Avg Word Length", "Avg Sentence Length"]
+        stats = {}
+
+        for label, data in zip([ "True", "False"], [ self.df_true, self.df_false]):
+            if data.empty:
+                continue
+
+            word_counts = data["text"].apply(lambda x: len(x.split()))
+            unique_word_counts = data["text"].apply(lambda x: len(set(x.split())))
+            sentence_counts = data["text"].apply(lambda x: x.count(".") + x.count("!") + x.count("?"))
+            avg_word_length = data["text"].apply(lambda x: np.mean([len(word) for word in x.split()]) if x else 0)
+            avg_sentence_length = word_counts / sentence_counts.replace(0, np.nan)
+
+            stats[label] = [
+                word_counts.mean(),
+                unique_word_counts.mean(),
+                sentence_counts.mean(),
+                avg_word_length.mean(),
+                avg_sentence_length.mean()
+            ]
+
+        max_values = np.max(list(stats.values()), axis=0)
+        normalized_stats = {k: np.array(v) / max_values for k, v in stats.items()}
+
+        angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+        angles += angles[:1] 
+
+        plt.figure(figsize=(8, 8))
+        ax = plt.subplot(111, polar=True)
+
+        for label, values in normalized_stats.items():
+            values = values.tolist()
+            values += values[:1]  
+            ax.plot(angles, values, label=label, marker="o", linestyle="-")
+
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(categories)
+        plt.title("Text Feature Radar Chart")
+        plt.legend()
+        plt.savefig(os.path.join(VISUALIZATION_DIR, "Overall", "text_feature_radar_chart.png"))
+        self.save_plot("Radar_chart.png", 'Compare')
+
+    def plot_tfidf_top_words(self, top_n=20):
+        """Plots the top TF-IDF words."""
+        vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
+        X_tfidf = vectorizer.fit_transform(self.df['text'])
+        feature_names = vectorizer.get_feature_names_out()
+        scores = X_tfidf.toarray().sum(axis=0)
+
+        df_tfidf = pd.DataFrame({'Word': feature_names, 'TF-IDF Score': scores})
+        df_tfidf = df_tfidf.sort_values(by='TF-IDF Score', ascending=False)
+
+        plt.figure(figsize=(12, 6))
+        sns.barplot(x='TF-IDF Score', y='Word', data=df_tfidf, palette='plasma')
+        plt.title(f"Top {top_n} TF-IDF Words")
+        plt.savefig(os.path.join(self.output_dir, "Overall", "tfidf_top_words.png"))
+        plt.close()
+
+    def train_word2vec(self):
+        """Trains Word2Vec and visualizes vector representations."""
+        sentences = [text.split() for text in self.df['text']]
+        model = Word2Vec(sentences, vector_size=100, window=5, min_count=2, workers=4)
+
+        words = list(model.wv.index_to_key)[:20]
+        vectors = [model.wv[word] for word in words]
+
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(vectors, annot=False, cmap='coolwarm')
+        plt.yticks(ticks=range(len(words)), labels=words, rotation=0)
+        plt.title("Word2Vec Vector Representations (Top Words)")
+        plt.savefig(os.path.join(self.output_dir, "Overall", "word2vec_vectors.png"))
+        plt.close()
+
+    def plot_umap(self):
+        """Generates UMAP visualization for fake and true news."""
+        
+        vectorized_features = np.array([self.nlp(x).vector for x in self.df['text']])
+        
+        umap_embedder = umap.UMAP(n_components=2, random_state=42)
+        umap_features = umap_embedder.fit_transform(vectorized_features)
+        
+        y = self.df['label'].map({'Fake': 0, 'True': 1})
+        labels_map = {0: "Fake", 1: "True"}
+        palette = {0: 'red', 1: 'blue'}
+
+        plt.figure(figsize=(12, 8))
+        sns.scatterplot(x=umap_features[:, 0], y=umap_features[:, 1], hue=y.map(labels_map), palette=palette, alpha=0.5, s=50)
+        
+        for category, color in palette.items():
+            idx = (y == category)
+            x_mean, y_mean = umap_features[idx, 0].mean(), umap_features[idx, 1].mean()
+            plt.text(x_mean, y_mean, labels_map[category], fontsize=12, color=color, fontweight='bold')
+
+        plt.title("UMAP Projection of Fake & True News", weight='bold', fontsize=14)
+        plt.legend(title="News Type")
+        plt.savefig(os.path.join(self.output_dir, "Overall", "umap_projection.png"))
+        plt.close()
+
+
+
+    @staticmethod
+    def clean_text(text):
+        """
+        Cleans text by removing punctuation and stopwords.
+
+        Args:
+            text (str): Input text.
+
+        Returns:
+            List[str]: List of cleaned words.
+        """
+        assert isinstance(text, str), "Input text must be a string."
+
+        words = text.lower().translate(str.maketrans('', '', string.punctuation)).split()
+        return [word for word in words if word not in stop_words]
+    
+
+if __name__ == "__main__":
+    
+
+    visualizer = DataVisualizer()
+    # visualizer.plot_subject_distribution()
+    # visualizer.plot_title_length_distribution()
+    # visualizer.plot_text_length_distribution()
+    # visualizer.plot_word_frequency()
+    # visualizer.generate_wordcloud()
+    # visualizer.plot_time_series()
+    # visualizer.plot_radar_chart()
+    visualizer.plot_tfidf_top_words()
+    visualizer.train_word2vec()
+    visualizer.plot_umap()

@@ -56,6 +56,7 @@ cd ECE-143-Final-Project
 2. Install required packages:
 ```bash
 pip install -r requirements.txt
+python -m spacy download en_core_web_lg
 ```
 
 ## Usage

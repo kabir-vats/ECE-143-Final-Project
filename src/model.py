@@ -1,4 +1,8 @@
+import json
+import pickle
 import pandas as pd
+import os
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
@@ -9,6 +13,16 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 import joblib
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Dense, Input, Embedding, LSTM, Dropout, Bidirectional
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
+from tqdm import tqdm
+import re
+
 
 class TextClassifier:
     """Classifier with basic tokenizers and models
@@ -93,17 +107,229 @@ class TextClassifier:
         """
         return self.pipeline.predict_proba(X_test)
 
-    def evaluate(self, X_test, y_test):
-        """Evaluate model with test data
+
+class LSTMClassifier:
+    """
+    LSTM Classifier
+
+    Uses LSTM model for text classification
+    """
+
+    def __init__(self):
+        """Initialize the LSTM classifier."""
+        self.tokenizer = Tokenizer()
+        self.model = None
+        self.max_length = None
+        self.vocab_size = None
+        self.ps = PorterStemmer()
+        nltk.download('stopwords')
+        self.stop_words = set(stopwords.words('english'))
+
+    def preprocess_text(self, text: str) -> str:
+        """Preprocess text data. Remove stop words
 
         Args:
-            X_test: Test data
-            y_test: Test data labels
+            text (pd.DataFrame): Text data to preprocess.
 
         Returns:
-            Float: acc score
-        """       
-        y_pred = self.predict(X_test)
-        return accuracy_score(y_test, y_pred)
+            pd.DataFrame: Preprocessed text data.
+        """
+        text = text.lower()
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        text = re.sub(r'[^a-zA-Z\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
+    def tokenize_text(self, x_train: pd.DataFrame) -> pd.DataFrame:
+        """Tokenize text and update tokenizer parameters."""
+        self.tokenizer.fit_on_texts(x_train)
+        train_seq = self.tokenizer.texts_to_sequences(x_train)
+        self.vocab_size = len(self.tokenizer.word_index) + 1
+        sequence_lengths = [len(seq) for seq in train_seq]
+        print(f"Average sequence length: {np.mean(sequence_lengths)}")
+        print(f"Max sequence length: {np.max(sequence_lengths)}")
+        self.max_length = int(np.percentile(sequence_lengths, 99))
+        return pad_sequences(train_seq, maxlen=self.max_length, padding='post', truncating='post')
+    
+    def get_seq(self, text: pd.DataFrame) -> pd.DataFrame:
+        """Convert text to padded sequences.
+        
+        Args:
+            text: Text data to convert.
+        """
+        seq = self.tokenizer.texts_to_sequences(text)
+        return pad_sequences(seq, maxlen=self.max_length, padding='post', truncating='post')
+    
+    def build_model(self) -> Sequential:
+        """Build and compile the LSTM model."""
+        
+        lr = 0.5e-4
+        embedding_dim = 600
+        model = Sequential([
+            Input(shape=(self.max_length,)),
+            Embedding(self.vocab_size, embedding_dim, input_length=self.max_length, trainable=False),
+            
+            Bidirectional(LSTM(256, return_sequences=True)),
+            Bidirectional(LSTM(128)),
+            Dropout(0.1),
+            
+            Dense(512, activation='relu'),
+            Dropout(0.2),
+            
+            Dense(1, activation='sigmoid')
+        ])
+        
+        model.compile(optimizer=Adam(learning_rate=lr), loss=BinaryCrossentropy(), metrics=['accuracy'])
+        model.summary()
+        return model
+    
+    def _merge_files(self, output_file: str, parts: list) -> None:
+        """Merge parts of a file into a single file.
 
+        Args:
+            output_file: Path to save the merged file.
+            parts: List of paths to the parts.
+        """
+        print("Merging weights files")
+        with open(output_file, "wb") as out:
+            for part in sorted(parts, key=lambda x: int(x.split("part")[-1])):
+                with open(part, "rb") as f:
+                    out.write(f.read())
+
+    def _split_file(self, file_path, output_dir, chunk_size=90 * 1024 * 1024): 
+        """Split a file into parts.
+
+        Args:
+            file_path: Path to the file to split.
+            output_dir: Directory to save the parts.
+            chunk_size: Size of each part in bytes (default 90MB).
+        """
+        file_size = os.path.getsize(file_path)
+        part_number = 1
+        part_files = []
+        file_basename = os.path.basename(file_path)
+    
+        with open(file_path, "rb") as f:
+            while chunk := f.read(chunk_size):
+                part_filename = os.path.join(output_dir, f"{file_basename}.part{part_number}")
+
+                with open(part_filename, "wb") as part_file:
+                    part_file.write(chunk)
+                print(f"Created: {part_filename}")
+                part_files.append(part_filename)
+                part_number += 1
+
+    def load_model(self, model_path) -> None:
+        """Load a model from a path (needs to be chunked through the save_model)
+
+        Args: 
+            model_path: path to the model
+        """
+        tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
+        config_path = os.path.join(model_path, "LSTM_config.json")
+        weight_parts_dir = os.path.join(model_path, "weight_parts")
+        merged_path = os.path.join(model_path, "model_weights.h5")
+
+        if not os.path.exists(tokenizer_path):
+            raise FileNotFoundError(f"Tokenizer file not found at {tokenizer_path}")
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Model config file not found at {config_path}")
+
+        with open(tokenizer_path, "rb") as handle:
+            self.tokenizer = pickle.load(handle)
+
+        with open(config_path, "r") as f:
+            loaded_dimensions = json.load(f)
+            self.vocab_size = loaded_dimensions["vocab_size"]
+            self.max_length = loaded_dimensions["max_length"]
+
+        self._merge_files(merged_path, [os.path.join(weight_parts_dir, f) for f in os.listdir(weight_parts_dir)])
+        self.model = self.build_model()
+        self.model.load_weights(merged_path)
+        print("Model weights loaded successfully")
+        
+    def save_model(self, model_path) -> None:
+        """ Save model weights and tokenizer to disk.
+
+        Args:
+            model_path: Path to save the model.
+        """
+        full_path = os.path.join(model_path, "model_weights.h5")
+        self.model.save_weights(full_path)
+        weight_parts_dir = os.path.join(model_path, "weight_parts")
+        if not os.path.exists(weight_parts_dir):
+            os.makedirs(weight_parts_dir)
+        self._split_file(full_path, weight_parts_dir)
+        
+        tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
+        with open(tokenizer_path, "wb") as handle:
+            pickle.dump(self.tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        cfg_path = os.path.join(model_path, "LSTM_config.json")
+        with open(cfg_path, "w") as f:
+            model_dimensions = {"vocab_size": self.vocab_size, "max_length": self.max_length}
+            json.dump(model_dimensions, f)
+    
+    def train(self, x_train, x_val, y_train, y_val) -> None:
+        """Tokenize data, build and train the LSTM model.
+
+        Args:
+            x_train: Training texts.
+            x_val: Validation texts.
+            y_train: Training labels.
+            y_val: Validation labels.
+        """
+        tqdm.pandas()
+        x_train = x_train.progress_apply(self.preprocess_text)
+        x_val = x_val.progress_apply(self.preprocess_text)
+        train_seq = self.tokenize_text(x_train)
+        val_seq = self.get_seq(x_val)
+        self.model = self.build_model()
+        callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=3, restore_best_weights=True)
+        callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, mode='min')
+        callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
+        history = self.model.fit(train_seq, y_train, epochs=20, batch_size=256,
+                       validation_data=(val_seq, y_val),
+                       callbacks=[callback_cp, callback_es, callback_rlr])
+        return history
+    
+    def predict(self, x_test, threshold=0.5, verbose=1):
+        """Make predictions using the trained model.
+
+        Args:
+            X_test: Test texts.
+            threshold: Classification threshold (default 0.5)
+            verbose: Whether to display progress bars (default 1)
+
+        Returns:
+            Binary predictions from the model.
+        """
+        x_test = x_test.apply(self.preprocess_text)
+        test_seq = self.get_seq(x_test)
+        raw_predictions = self.model.predict(test_seq, verbose=verbose)
+
+        binary_predictions = (raw_predictions > threshold).astype(int)
+        
+        if binary_predictions.ndim > 1 and binary_predictions.shape[1] == 1:
+            binary_predictions = binary_predictions.flatten()
+            
+        return binary_predictions
+
+    def predict_proba(self, x_test, verbose=1):
+        """Get probability scores.
+        
+        Args:
+            X_test: Test texts.
+            verbose: Whether to display progress bars (default 1)
+            
+        Returns:
+            Probability scores from the model.
+        """
+        x_test = x_test.apply(self.preprocess_text)
+        test_seq = self.get_seq(x_test)
+        probas = self.model.predict(test_seq, verbose=verbose)
+        
+        if probas.ndim > 1 and probas.shape[1] == 1:
+            probas = probas.flatten()
+
+        return np.vstack((1-probas, probas)).T

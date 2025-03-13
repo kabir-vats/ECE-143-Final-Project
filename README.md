@@ -32,6 +32,9 @@ A comprehensive fake news detection system using multpie machine learning approa
   - TF-IDF Vectorization
   - Count Vectorization
 
+- Modern deep learning techniques
+  - Long Short-Term Memory (LSTM)
+
 - Comprehensive evaluation metrics:
   - Accuracy
   - Precision
@@ -82,12 +85,12 @@ python src/train.py --model_name naive_bayes --tokenizer_name tfidf --save_path 
 Evaluate a trained model and generate visualization results:
 
 ```bash
-python src/evaluate.py --model_path [model_path] --save_plots [plots_path]
+python src/evaluate.py --model_name [model_name] --model_path [model_path] --save_plots [plots_path]
 ```
 
 Example:
 ```bash
-python src/evaluate.py --model_path nb_model.pkl --save_plots results/nb_evaluation
+python src/evaluate.py --model_name naive_bayes --model_path nb_model.pkl --save_plots results/nb_evaluation
 ```
 
 ## Results

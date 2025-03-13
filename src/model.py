@@ -20,9 +20,6 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, Input, Embedding, LSTM, Dropout, Bidirectional
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
-import nltk
-from nltk.stem.porter import PorterStemmer
-from nltk.corpus import stopwords
 from tqdm import tqdm
 import re
 
@@ -231,7 +228,7 @@ class LSTMClassifier:
         tokenizer_path = os.path.join(model_path, "tokenizer.pickle")
         config_path = os.path.join(model_path, "LSTM_config.json")
         weight_parts_dir = os.path.join(model_path, "weight_parts")
-        merged_path = os.path.join(model_path, "merged_weights.h5")
+        merged_path = os.path.join(model_path, "model_weights.h5")
 
         if not os.path.exists(tokenizer_path):
             raise FileNotFoundError(f"Tokenizer file not found at {tokenizer_path}")

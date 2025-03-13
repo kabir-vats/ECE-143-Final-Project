@@ -24,6 +24,7 @@ import nltk
 from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
 from tqdm import tqdm
+import re
 
 
 class TextClassifier:
@@ -127,8 +128,7 @@ class LSTMClassifier:
         nltk.download('stopwords')
         self.stop_words = set(stopwords.words('english'))
 
-
-    def preprocess_text(self, text: pd.DataFrame) -> pd.DataFrame:
+    def preprocess_text(self, text: str) -> str:
         """Preprocess text data. Remove stop words
 
         Args:
@@ -137,28 +137,21 @@ class LSTMClassifier:
         Returns:
             pd.DataFrame: Preprocessed text data.
         """
-        text = (text.lower()
-                .replace('[^a-zA-Z]', ' ')
-                .replace('\s+', ' ')
-                .replace(r'https?://\S+|www\.\S+|[^a-zA-Z\s]', '')
-                .replace(r'<.*?>', '')
-               )
-        text = text.split()
-        text = [self.ps.stem(word) for word in text if word not in self.stop_words]
-        text = " ".join(text)
-        
+        text = text.lower()
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        text = re.sub(r'[^a-zA-Z\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
         return text
 
     def tokenize_text(self, x_train: pd.DataFrame) -> pd.DataFrame:
         """Tokenize text and update tokenizer parameters."""
-        self.tokenizer = Tokenizer(num_words = 5000)
         self.tokenizer.fit_on_texts(x_train)
-        print('hh')
         train_seq = self.tokenizer.texts_to_sequences(x_train)
-        print('charo')
         self.vocab_size = len(self.tokenizer.word_index) + 1
-        self.max_length = max(len(sequence) for sequence in train_seq)
-        print('here')
+        sequence_lengths = [len(seq) for seq in train_seq]
+        print(f"Average sequence length: {np.mean(sequence_lengths)}")
+        print(f"Max sequence length: {np.max(sequence_lengths)}")
+        self.max_length = int(np.percentile(sequence_lengths, 99))
         return pad_sequences(train_seq, maxlen=self.max_length, padding='post', truncating='post')
     
     def get_seq(self, text: pd.DataFrame) -> pd.DataFrame:
@@ -172,21 +165,23 @@ class LSTMClassifier:
     
     def build_model(self) -> Sequential:
         """Build and compile the LSTM model."""
-        lr = 1e-3
-        embedding_dim = 300
+        
+        lr = 0.5e-4
+        embedding_dim = 600
         model = Sequential([
             Input(shape=(self.max_length,)),
             Embedding(self.vocab_size, embedding_dim, input_length=self.max_length, trainable=False),
             
-            Bidirectional(LSTM(64, return_sequences=True)),
-            Bidirectional(LSTM(32)),
-            Dropout(0.2),
+            Bidirectional(LSTM(256, return_sequences=True)),
+            Bidirectional(LSTM(128)),
+            Dropout(0.1),
             
-            Dense(256, activation='relu'),
-            Dropout(0.5),
+            Dense(512, activation='relu'),
+            Dropout(0.2),
             
             Dense(1, activation='sigmoid')
         ])
+        
         model.compile(optimizer=Adam(learning_rate=lr), loss=BinaryCrossentropy(), metrics=['accuracy'])
         model.summary()
         return model
@@ -290,19 +285,15 @@ class LSTMClassifier:
         tqdm.pandas()
         x_train = x_train.progress_apply(self.preprocess_text)
         x_val = x_val.progress_apply(self.preprocess_text)
-        print('debug')
         train_seq = self.tokenize_text(x_train)
-        print('1')
         val_seq = self.get_seq(x_val)
-        print('2')
         self.model = self.build_model()
-        print('3')
-        callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=2, restore_best_weights=True)
-        callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, mode='min')
+        callback_es = EarlyStopping(monitor='val_loss', mode='min', patience=3, restore_best_weights=True)
+        callback_rlr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=2, mode='min')
         callback_cp = ModelCheckpoint("best_model.h5", monitor='val_loss', mode='min', save_best_only=True)
-        history = self.model.fit(train_seq, y_train, epochs=4, batch_size=32,
+        history = self.model.fit(train_seq, y_train, epochs=20, batch_size=256,
                        validation_data=(val_seq, y_val),
-                       callbacks=[callback_es, callback_rlr, callback_cp])
+                       callbacks=[callback_cp, callback_es, callback_rlr])
         return history
     
     def predict(self, x_test, threshold=0.5, verbose=1):
@@ -316,14 +307,12 @@ class LSTMClassifier:
         Returns:
             Binary predictions from the model.
         """
-        x_test = x_test.progress_apply(self.preprocess_text)
+        x_test = x_test.apply(self.preprocess_text)
         test_seq = self.get_seq(x_test)
         raw_predictions = self.model.predict(test_seq, verbose=verbose)
-        
-        # Convert probabilities to binary predictions
+
         binary_predictions = (raw_predictions > threshold).astype(int)
         
-        # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
         if binary_predictions.ndim > 1 and binary_predictions.shape[1] == 1:
             binary_predictions = binary_predictions.flatten()
             
@@ -339,14 +328,11 @@ class LSTMClassifier:
         Returns:
             Probability scores from the model.
         """
-        x_test = self.preprocess_text(x_test)
+        x_test = x_test.apply(self.preprocess_text)
         test_seq = self.get_seq(x_test)
         probas = self.model.predict(test_seq, verbose=verbose)
         
-        # If predictions are in shape (n_samples, 1), flatten to (n_samples,)
         if probas.ndim > 1 and probas.shape[1] == 1:
             probas = probas.flatten()
-        
-        # Convert to scikit-learn expected format (n_samples, n_classes)
-        # For binary classification, create array with [1-p, p] for each prediction
+
         return np.vstack((1-probas, probas)).T

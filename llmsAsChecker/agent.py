@@ -78,12 +78,12 @@ if __name__ == "__main__":
     #Test
 
     import pprint
-    sample = {
+    input = {
         'title': 'Scientists Invent Faster-than-Light Engine',
-        'text': 'NASA declared that their scientists designed and tested the first faster-than-light engine '
-        'in the world, which reached speeds up to three times the speed of light.',
+        'text': 'NASA declared that their scientists designed and tested the first '
+        'faster-than-light engine in the world, which reached speeds up to three '
+        'times the speed of light.',
         'date': 'March 10, 2024',
         'model': 'llama'
     }
-
-    pprint.pprint(analyze_news(**sample))
+    pprint.pprint(analyze_news(**input))

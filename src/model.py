@@ -406,7 +406,7 @@ class BERT(nn.Module):
         options_name = "bert-base-uncased"
         self.encoder = BertForSequenceClassification.from_pretrained(options_name)
 
-    def forward(self, text, label):
+    def forward(self, text, label=None):
         """Process input through the BERT model.
         
         Args:
@@ -416,15 +416,14 @@ class BERT(nn.Module):
         Returns:
             Model output (loss and features during training, logits during inference).
         """
-        def forward(self, text, label=None):
-            if label is not None:
-                # Training mode with labels
-                loss, text_fea = self.encoder(text, labels=label)[:2]
-                return loss, text_fea
-            else:
-                # Inference mode without labels
-                output = self.encoder(text)
-                return output.logits
+        if label is not None:
+            # Training mode with labels
+            loss, text_fea = self.encoder(text, labels=label)[:2]
+            return loss, text_fea
+        else:
+            # Inference mode without labels
+            output = self.encoder(text)
+            return output.logits
             
 
 class BERTClassifier:
@@ -532,12 +531,13 @@ class BERTClassifier:
         
         return state_dict['train_loss_list'], state_dict['valid_loss_list'], state_dict['global_steps_list']
     
-    def train(self, train_df, valid_df):
+    def train(self, train_df, valid_df, model_path="./model/BERT"):
         """Train the BERT model.
         
         Args:
             train_df: Training DataFrame with text and labels.
             valid_df: Validation DataFrame with text and labels.
+            model_path: Path to save model.
         """
         train_dataset = TextDataset(train_df, self.tokenizer, self.MAX_SEQ_LEN)
         valid_dataset = TextDataset(valid_df, self.tokenizer, self.MAX_SEQ_LEN)
@@ -553,12 +553,11 @@ class BERTClassifier:
         global_steps_list = []
 
         model = BERT().to(self.device)
-        optimizer = optim.Adam(model.parameters(), lr=2e-5)
-        criterion=nn.BCELoss()
+        optimizer = optim.Adam(model.parameters(), lr=1e-5)
+        criterion= nn.BCELoss()
 
-        num_epochs=5,
-        eval_every=None,
-        model_path="./models/BERT",
+        num_epochs=5
+        eval_every=None
         best_valid_loss=float("Inf")
 
         if eval_every is None:
@@ -617,5 +616,41 @@ class BERTClassifier:
 
         self.save_metrics(f"{model_path}/metrics.pt", train_loss_list, valid_loss_list, global_steps_list)
         print("Finished Training!")
+
+    def evaluate(self, test_df, model_path="./model/BERT"):
+        """Evaluate the BERT model.
+        
+        Args:
+            model: The model to evaluate
+            test_df the dataframe of test
+        """
+        model = BERT().to(self.device)
+        self.load_checkpoint(f"{model_path}/model.pt", model)
+        
+        test_dataset = TextDataset(test_df, self.tokenizer, self.MAX_SEQ_LEN)
+        test_loader = DataLoader(test_dataset, batch_size=16, shuffle=True, collate_fn=self.collate_fn)
+        
+        y_pred = []
+        y_true = []
+        y_proba = []  
+        
+        model.eval()
+        with torch.no_grad():
+            for batch in test_loader:
+                labels = batch["label"].type(torch.LongTensor)
+                titletext = batch["titletext"].type(torch.LongTensor) 
+                labels = labels.to(self.device)
+                titletext = titletext.to(self.device)
+    
+                output = model.encoder(titletext)
+                logits = output.logits
+                probs = torch.softmax(logits, dim=1)  
+                preds = torch.argmax(probs, dim=1)    
+    
+                y_pred.extend(preds.tolist())
+                y_proba.extend(probs[:, 1].tolist()) 
+                y_true.extend(labels.tolist())
+    
+        return y_true, y_pred, y_proba
 
 

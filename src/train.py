@@ -1,11 +1,12 @@
 import argparse
 import joblib
 from data_loader import dataset_split
-from model import TextClassifier, LSTMClassifier
+from model import TextClassifier, LSTMClassifier, BERTClassifier
 from preprocess import preprocess_raw
 import os
 import seaborn as sns
 import matplotlib.pyplot as plt
+import torch
 
 def train_text_classifier(model_name, tokenizer_name, save_path):
     """train a model and save it to a file
@@ -50,6 +51,31 @@ def train_LSTM_classifier(save_path):
     model_history = model.train(X_train, X_val, y_train, y_val)
     plot_LSTM_loss(model_history, save_path)
     model.save_model(save_path)
+
+
+def plot_BERT_loss(save_path):
+    metrics = torch.load(save_path + "/metrics.pt")  # Load as dictionary
+    train_loss_list = metrics["train_loss_list"]
+    valid_loss_list = metrics["valid_loss_list"]
+    global_steps_list = metrics["global_steps_list"]
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(8, 5))
+    plt.plot(global_steps_list, train_loss_list, label='Train Loss', color='royalblue', linewidth=2, marker='o', markersize=5)
+    plt.plot(global_steps_list, valid_loss_list, label='Validation Loss', color='darkorange', linewidth=2, marker='s', markersize=5)
+    plt.xlabel('Global Steps', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.title('BERT Training vs Validation Loss', fontsize=14, fontweight='bold')
+    plt.legend(frameon=True, fontsize=10)
+    plt.savefig(f"{save_path}_training_curve.png", dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+def train_BERT_classifier(save_path):
+    train_df, val_df, test_df = dataset_split(ratio=(0.05, 0.05, 0.9))
+    model = BERTClassifier()
+    model.train(train_df, val_df, save_path)
+    plot_BERT_loss(save_path)
+    
 
 
 if __name__ == "__main__":

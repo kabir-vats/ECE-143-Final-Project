@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc, precision_recall_curve, accuracy_score
 from data_loader import dataset_split
-from model import TextClassifier, LSTMClassifier
+from model import TextClassifier, LSTMClassifier, BERTClassifier
 
 def plot_confusion_matrix(model_name, y_true, y_pred, save_path=None):
     """Plot confusion matrix as a heatmap
@@ -24,7 +24,7 @@ def plot_confusion_matrix(model_name, y_true, y_pred, save_path=None):
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
     if save_path:
-        plt.savefig(f"{save_path}_{model_name}_confusion_matrix.png")
+        plt.savefig(f"{save_path}/_{model_name}_confusion_matrix.png")
     plt.show()
 
 def plot_roc_curve(model_name, y_true, y_prob, save_path=None):
@@ -49,7 +49,7 @@ def plot_roc_curve(model_name, y_true, y_prob, save_path=None):
     plt.title(f'Receiver Operating Characteristic (ROC) Curve for {model_name}')
     plt.legend(loc="lower right")
     if save_path:
-        plt.savefig(f"{save_path}_{model_name}_roc_curve.png")
+        plt.savefig(f"{save_path}/_{model_name}_roc_curve.png")
     plt.show()
 
 def plot_precision_recall_curve(model_name, y_true, y_prob, save_path=None):
@@ -73,15 +73,15 @@ def plot_precision_recall_curve(model_name, y_true, y_prob, save_path=None):
     plt.title(f'Precision-Recall Curve for {model_name}')
     plt.legend(loc="lower left")
     if save_path:
-        plt.savefig(f"{save_path}_{model_name}_pr_curve.png")
+        plt.savefig(f"{save_path}/_{model_name}_pr_curve.png")
     plt.show()
 
 def eval_text_classifier(model_name, model_path, save_plots=None):
     """Evaluate model and visualize results
 
     Args:
-        model_path (str): Path to the trained model
-        save_plots (str, optional): Path prefix for saving plots (default: None)
+        model_path : Path to the trained model
+        save_plots : Path prefix for saving plots (default: None)
     """
     train_df, val_df, test_df = dataset_split()
     model = TextClassifier()
@@ -122,6 +122,28 @@ def eval_LSTM_classifier(model_name, model_path, save_plots=None):
     plot_confusion_matrix(model_name, y_true, y_pred, save_plots)
     plot_roc_curve(model_name, y_true, y_prob, save_plots)
     plot_precision_recall_curve(model_name, y_true, y_prob, save_plots)
+
+
+def eval_BERT_classifier(model_name, model_path, save_plots=None):
+    """Evaluate BERT model and visualize results
+
+    Args:
+        model_path : Path to the trained model
+        save_plots : Path prefix for saving plots (default: None)
+    """
+    train_df, val_df, test_df = dataset_split(ratio=(0.05, 0.05, 0.9))
+    model = BERTClassifier()
+    y_true, y_pred, y_prob = model.evaluate(test_df)
+    acc = accuracy_score(y_true, y_pred)
+    print("\n=== Model Performance ===")
+    print(f"Accuracy: {acc:.4f}")
+    print("\n=== Detailed Classification Report ===")
+    print(classification_report(y_true, y_pred))
+    print("\n=== Visualization Results ===")
+    plot_confusion_matrix(model_name, y_true, y_pred, save_plots)
+    plot_roc_curve(model_name, y_true, y_prob, save_plots)
+    plot_precision_recall_curve(model_name, y_true, y_prob, save_plots)
+    
 
 
 if __name__ == "__main__":

@@ -5,6 +5,9 @@ A comprehensive fake news detection system using multpie machine learning approa
 ## Project Structure
 ```
 .
+├── llmsAsChecker/
+│   ├── agent.py          # Construct a function that interact with llms
+│   └── interact.py       # Interact with llms using thread pool
 ├── src/
 │   ├── data_loader.py    # Data loading and splitting utilities
 │   ├── model.py          # Model implementations 
@@ -43,6 +46,10 @@ A comprehensive fake news detection system using multpie machine learning approa
   - ROC Curve
   - Confusion Matrix
   - Precision-Recall Curve
+
+- Utilize LLMs to check News:
+  - Randomly select 1000 samples from each .csv
+  - Utilize deepseek-r1 and llama-3.3
 
 ## Installation
 
@@ -93,6 +100,12 @@ Example:
 python src/evaluate.py --model_name naive_bayes --model_path nb_model.pkl --save_plots results/nb_evaluation
 ```
 
+### Replicate experiment on LLMs
+
+1. Modify "dp" variable in llmsAsChecker/interact.py to the directory of Fake.csv and True.csv
+
+2. Run llmsAsChecker/interact.py and wait until 4 .json file appears
+
 ## Results
 
 The evaluation script generates several visualization plots:
@@ -102,6 +115,8 @@ The evaluation script generates several visualization plots:
 - Detailed Classification Report
 
 Results are saved in the specified output directory and displayed during evaluation.
+
+The output from LLMs are recorded in 4 .json file in  llmsAsChecker/data
 
 
 ## Acknowledgments

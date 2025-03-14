@@ -24,6 +24,11 @@ A comprehensive fake news detection system using multpie machine learning approa
 
 ## Features
 
+- Text Data Visualization
+  - Word frequency analysis
+  - Word cloud visualization
+  - Exploratory Data Analysis
+
 - Multiple classical machine learning models:
   - Naive Bayes
   - Logistic Regression

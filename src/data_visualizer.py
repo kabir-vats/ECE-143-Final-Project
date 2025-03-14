@@ -28,7 +28,7 @@ class DataVisualizer:
     TF-IDF analysis, Word2Vec, and LDA topic modeling.
     """
 
-    def __init__(self, raw_dir = RAW_DATA_DIR, output_dir=VISUALIZATION_DIR):
+    def __init__(self, is_save = True, raw_dir = RAW_DATA_DIR, output_dir=VISUALIZATION_DIR):
         """
         Initializes the DataVisualizer.
 
@@ -36,6 +36,7 @@ class DataVisualizer:
             df (pd.DataFrame): The input DataFrame containing at least 'text', 'subject', and 'true/false' columns.
             output_dir (str): Directory to save generated plots.
         """
+        self.is_save = is_save
         self.output_dir = output_dir
         self.df_true = pd.read_csv(raw_dir+'/Fake.csv')
         self.df_false = pd.read_csv(raw_dir+'/True.csv')
@@ -54,7 +55,7 @@ class DataVisualizer:
         for label in ["Overall", "Compare","True", "False"]:
             os.makedirs(os.path.join(self.output_dir, label), exist_ok=True)
 
-        self.nlp = spacy.load('en_core_web_lg', disable=["parser", "tagger", "ner", "textcat"])
+        self.nlp = spacy.load('en_core_web_lg', disable=["parser", "ner", "textcat"])
 
     def save_plot(self, filename: str, label='Overall'):
         """
@@ -77,9 +78,14 @@ class DataVisualizer:
                     kde=False, label='Fake', bins=50, color='blue', alpha=0.5)
         sns.histplot(self.df_false['title_length'], 
                     kde=False, label='True', bins=50, color='orange',alpha=0.5)
-        plt.xlabel('Title Length', weight='bold')
-        plt.title('Length of title comparison', weight='bold')
-        self.save_plot("title_length_distribution.png", 'Compare')
+        plt.xlabel('Title Length')
+        plt.title('Length of title comparison')
+        if self.save_plot:
+            self.save_plot("title_length_distribution.png", 'Compare')
+        else:
+            plt.show()
+       
+        
 
     def plot_subject_distribution(self):
         """Plots and saves the distribution of subjects separately for True, False, and Overall data."""
@@ -96,8 +102,10 @@ class DataVisualizer:
         plt.xlabel("Count")
         plt.ylabel("Subject")
         plt.title(f"Distribution of Subjects (Compare)")
-        self.save_plot("subject_distribution.png", 'Compare')
-
+        if self.save_plot:
+            self.save_plot("subject_distribution.png", 'Compare')
+        else:
+            plt.show()
     def plot_text_length_distribution(self):
         """Plots and saves the distribution of text lengths separately for True, False, and Overall data."""
         plt.figure(figsize=(12,6))
@@ -105,16 +113,12 @@ class DataVisualizer:
                     kde=False, label='Fake', bins=50, color='blue', alpha=0.5)
         sns.histplot(self.df_false['text_length'], 
                     kde=False, label='True', bins=50, color='orange',alpha=0.5)
-        plt.xlabel('Text Length', weight='bold')
-        plt.title('Length of Text comparison', weight='bold')
-        self.save_plot("Text_length_distribution.png", 'Compare')
-
-    def count_nouns_and_prop_nouns(self,text):
-        """ Return number of nouns and proper nouns in text """
-        doc = self.nlp(text)
-        pos = [token.pos_ for token in doc]
-        return pos.count('NOUN'), pos.count('PROPN')
-
+        plt.xlabel('Text Length')
+        plt.title('Length of Text comparison')
+        if self.save_plot:
+            self.save_plot("Text_length_distribution.png", 'Compare')
+        else:
+            plt.show()
 
     def plot_word_frequency(self, top_n=20):
         """
@@ -137,7 +141,10 @@ class DataVisualizer:
             plt.figure(figsize=(12, 6))
             sns.barplot(x='Frequency', y='Word', data=df_freq, palette='viridis')
             plt.title(f"Top {top_n} Most Common Words ({label})")
-            self.save_plot("word_frequency.png", label)
+            if self.save_plot:
+                self.save_plot("word_frequency.png", label)
+            else:
+                plt.show()  
 
     def generate_wordcloud(self):
         """Generates and saves a word cloud visualization separately for True, False, and Overall data."""
@@ -149,21 +156,27 @@ class DataVisualizer:
             plt.imshow(wordcloud, interpolation="bilinear")
             plt.axis("off")
             plt.title(f"Word Cloud ({label})")
-            self.save_plot("word_cloud.png", label)
+            if self.save_plot:
+                self.save_plot("word_cloud.png", label)
+            else:
+                plt.show()
 
     def plot_time_series(self):
         """Plot the number of articles over time for True and Fake news in the same plot."""
-        df_true_time = self.df.groupby([self.df_true['date'].dt.to_period('M'), 'label']).size().reset_index(name='count')
-        df_false_time = self.df.groupby([self.df_false['date'].dt.to_period('M'), 'label']).size().reset_index(name='count')
-
-        plt.figure(figsize=(12, 5))
-        sns.lineplot(x=df_true_time['date'].astype(str), y=df_true_time['count'], label='True', marker='o',color='blue')
-        sns.lineplot(x=df_false_time['date'].astype(str), y=df_false_time['count'], label='False', marker='o',color='orange')
+        df_time = self.df.groupby([self.df['date'].dt.to_period('M'), 'label']).size().reset_index(name='count')
+        # df_time.info()
+        df_time["date"] = df_time["date"].dt.to_timestamp() 
+        plt.figure(figsize=(12, 6))
+        sns.lineplot(data=df_time, x="date", y="count", hue="label", marker="o")
+        plt.grid(True)
         plt.xticks(rotation=45)
         plt.xlabel("Date")
         plt.ylabel("Number of Articles")
         plt.title("Article Count Over Time (True vs. Fake)")
-        self.save_plot("Time_series.png", 'Compare')
+        if self.save_plot:
+            self.save_plot("Time_series.png", 'Compare')
+        else:
+            plt.show()
 
     def plot_radar_chart(self):
         """
@@ -198,18 +211,25 @@ class DataVisualizer:
 
         plt.figure(figsize=(8, 8))
         ax = plt.subplot(111, polar=True)
+        color_dict = {'True':'blue','False':'orange',}
 
         for label, values in normalized_stats.items():
             values = values.tolist()
             values += values[:1]  
+            ax.fill(angles, values, color=color_dict[label], alpha=0.25)
             ax.plot(angles, values, label=label, marker="o", linestyle="-")
+            
+
 
         ax.set_xticks(angles[:-1])
         ax.set_xticklabels(categories)
         plt.title("Text Feature Radar Chart")
         plt.legend()
         plt.savefig(os.path.join(VISUALIZATION_DIR, "Overall", "text_feature_radar_chart.png"))
-        self.save_plot("Radar_chart.png", 'Compare')
+        if self.save_plot:
+            self.save_plot("Radar_chart.png", 'Compare')
+        else:
+            plt.show()
 
     def plot_tfidf_top_words(self, top_n=20):
         """Plots the top TF-IDF words."""
@@ -224,8 +244,10 @@ class DataVisualizer:
         plt.figure(figsize=(12, 6))
         sns.barplot(x='TF-IDF Score', y='Word', data=df_tfidf, palette='plasma')
         plt.title(f"Top {top_n} TF-IDF Words")
-        plt.savefig(os.path.join(self.output_dir, "Overall", "tfidf_top_words.png"))
-        plt.close()
+        if self.save_plot:
+            self.save_plot("tfidf_top_words.png", 'Overall')
+        else:
+            plt.show()
 
     def train_word2vec(self):
         """Trains Word2Vec and visualizes vector representations."""
@@ -239,35 +261,10 @@ class DataVisualizer:
         sns.heatmap(vectors, annot=False, cmap='coolwarm')
         plt.yticks(ticks=range(len(words)), labels=words, rotation=0)
         plt.title("Word2Vec Vector Representations (Top Words)")
-        plt.savefig(os.path.join(self.output_dir, "Overall", "word2vec_vectors.png"))
-        plt.close()
-
-    def plot_umap(self):
-        """Generates UMAP visualization for fake and true news."""
-        
-        vectorized_features = np.array([self.nlp(x).vector for x in self.df['text']])
-        
-        umap_embedder = umap.UMAP(n_components=2, random_state=42)
-        umap_features = umap_embedder.fit_transform(vectorized_features)
-        
-        y = self.df['label'].map({'Fake': 0, 'True': 1})
-        labels_map = {0: "Fake", 1: "True"}
-        palette = {0: 'red', 1: 'blue'}
-
-        plt.figure(figsize=(12, 8))
-        sns.scatterplot(x=umap_features[:, 0], y=umap_features[:, 1], hue=y.map(labels_map), palette=palette, alpha=0.5, s=50)
-        
-        for category, color in palette.items():
-            idx = (y == category)
-            x_mean, y_mean = umap_features[idx, 0].mean(), umap_features[idx, 1].mean()
-            plt.text(x_mean, y_mean, labels_map[category], fontsize=12, color=color, fontweight='bold')
-
-        plt.title("UMAP Projection of Fake & True News", weight='bold', fontsize=14)
-        plt.legend(title="News Type")
-        plt.savefig(os.path.join(self.output_dir, "Overall", "umap_projection.png"))
-        plt.close()
-
-
+        if self.save_plots:
+            self.save_plot("word2vec_vectors.png", 'Overall')
+        else:
+            plt.show()
 
     @staticmethod
     def clean_text(text):
@@ -291,12 +288,11 @@ if __name__ == "__main__":
 
     visualizer = DataVisualizer()
     # visualizer.plot_subject_distribution()
-    # visualizer.plot_title_length_distribution()
-    # visualizer.plot_text_length_distribution()
-    # visualizer.plot_word_frequency()
-    # visualizer.generate_wordcloud()
-    # visualizer.plot_time_series()
-    # visualizer.plot_radar_chart()
-    visualizer.plot_tfidf_top_words()
-    visualizer.train_word2vec()
-    visualizer.plot_umap()
+    visualizer.plot_title_length_distribution()
+    visualizer.plot_text_length_distribution()
+    visualizer.plot_word_frequency()
+    visualizer.generate_wordcloud()
+    visualizer.plot_time_series()
+    visualizer.plot_radar_chart()
+    # visualizer.plot_tfidf_top_words()
+    # visualizer.train_word2vec()

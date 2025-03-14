@@ -22,6 +22,11 @@ from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau,ModelCheckpoint
 from tqdm import tqdm
 import re
+import torch
+from torch.utils.data import Dataset, DataLoader
+from transformers import BertTokenizer, BertForSequenceClassification
+import torch.nn as nn
+import torch.optim as optim
 
 
 class TextClassifier:
@@ -121,9 +126,6 @@ class LSTMClassifier:
         self.model = None
         self.max_length = None
         self.vocab_size = None
-        self.ps = PorterStemmer()
-        nltk.download('stopwords')
-        self.stop_words = set(stopwords.words('english'))
 
     def preprocess_text(self, text: str) -> str:
         """Preprocess text data. Remove stop words
@@ -333,3 +335,322 @@ class LSTMClassifier:
             probas = probas.flatten()
 
         return np.vstack((1-probas, probas)).T
+
+
+# Text Dataset for DeBERTa fine tuning 
+
+class TextDataset(Dataset):
+    """Custom Dataset for processing text data for BERT models.
+    
+    Creates a PyTorch dataset with text, title, and titletext features
+    along with labels for transformer-based model training.
+    """
+    
+    def __init__(self, df, tokenizer, max_length):
+        """Initialize dataset with dataframe and tokenizer.
+        
+        Args:
+            df: DataFrame with text columns and labels.
+            tokenizer: Transformer tokenizer to process text.
+            max_length: Maximum sequence length for padding/truncation.
+        """
+        self.labels = df["label"].values
+        self.texts = df["text"].values
+        self.titles = df["title"].values
+        self.titletexts = df["titletext"].values
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        """Return the number of samples in the dataset.
+        
+        Returns:
+            int: Dataset size.
+        """
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        """Get a tokenized sample from the dataset.
+        
+        Args:
+            idx: Index of the sample to retrieve.
+            
+        Returns:
+            dict: Dictionary containing tokenized text features and label.
+        """
+        label = torch.tensor(self.labels[idx], dtype=torch.float)
+
+        # Tokenize text, title, and titletext
+        encoded_text = self.tokenizer(self.texts[idx], padding="max_length", truncation=True, max_length=self.max_length, return_tensors="pt")
+        encoded_title = self.tokenizer(self.titles[idx], padding="max_length", truncation=True, max_length=self.max_length, return_tensors="pt")
+        encoded_titletext = self.tokenizer(self.titletexts[idx], padding="max_length", truncation=True, max_length=self.max_length, return_tensors="pt")
+
+        return {
+            "label": label,
+            "text": encoded_text["input_ids"].squeeze(0),
+            "title": encoded_title["input_ids"].squeeze(0),
+            "titletext": encoded_titletext["input_ids"].squeeze(0),
+        }
+    
+class BERT(nn.Module):
+    """BERT model wrapper for text classification.
+    
+    Wraps the HuggingFace BERT sequence classification model
+    for fake news detection.
+    """
+
+    def __init__(self):
+        """Initialize the BERT model with pre-trained weights."""
+        super(BERT, self).__init__()
+
+        options_name = "bert-base-uncased"
+        self.encoder = BertForSequenceClassification.from_pretrained(options_name)
+
+    def forward(self, text, label=None):
+        """Process input through the BERT model.
+        
+        Args:
+            text: Tokenized input text.
+            label: Classification labels (optional).
+            
+        Returns:
+            Model output (loss and features during training, logits during inference).
+        """
+        if label is not None:
+            # Training mode with labels
+            loss, text_fea = self.encoder(text, labels=label)[:2]
+            return loss, text_fea
+        else:
+            # Inference mode without labels
+            output = self.encoder(text)
+            return output.logits
+            
+
+class BERTClassifier:
+    """BERT-based text classifier.
+    
+    Handles training, evaluation, and inference with BERT models
+    for fake news classification.
+    """
+    
+    def __init__(self):
+        """Initialize the BERT classifier with tokenizer and model."""
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.max_length = 512
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = BERT().to(self.device)
+        self.MAX_SEQ_LEN = 128
+        self.PAD_INDEX = self.tokenizer.pad_token_id
+        self.UNK_INDEX = self.tokenizer.unk_token_id
+
+    def collate_fn(self, batch):
+        """Collate function for DataLoader.
+        
+        Args:
+            batch: List of samples from the dataset.
+            
+        Returns:
+            dict: Batched samples with stacked tensors.
+        """
+        labels = torch.stack([item["label"] for item in batch])
+        texts = torch.stack([item["text"] for item in batch])
+        titles = torch.stack([item["title"] for item in batch])
+        titletexts = torch.stack([item["titletext"] for item in batch])
+        
+        return {"label": labels, "text": texts, "title": titles, "titletext": titletexts}
+    
+    def save_checkpoint(self, save_path, model, valid_loss):
+        """Save model checkpoint to disk.
+        
+        Args:
+            save_path: Path to save the checkpoint.
+            model: Model to save.
+            valid_loss: Validation loss for the model.
+        """
+        if save_path == None:
+            return
+        
+        state_dict = {'model_state_dict': model.state_dict(),
+                    'valid_loss': valid_loss}
+        
+        torch.save(state_dict, save_path)
+        print(f'Model saved to ==> {save_path}')
+
+    def load_checkpoint(self, load_path, model):
+        """Load model checkpoint from disk.
+        
+        Args:
+            load_path: Path to the checkpoint file.
+            model: Model to load weights into.
+            
+        Returns:
+            float: Validation loss from the checkpoint.
+        """
+        if load_path==None:
+            return
+        
+        state_dict = torch.load(load_path, map_location=self.device)
+        print(f'Model loaded from <== {load_path}')
+        
+        model.load_state_dict(state_dict['model_state_dict'])
+        return state_dict['valid_loss']
+
+    def save_metrics(self, save_path, train_loss_list, valid_loss_list, global_steps_list):
+        """Save training metrics to disk.
+        
+        Args:
+            save_path: Path to save metrics.
+            train_loss_list: List of training losses.
+            valid_loss_list: List of validation losses.
+            global_steps_list: List of global steps.
+        """
+        if save_path == None:
+            return
+        
+        state_dict = {'train_loss_list': train_loss_list,
+                    'valid_loss_list': valid_loss_list,
+                    'global_steps_list': global_steps_list}
+        
+        torch.save(state_dict, save_path)
+        print(f'Model saved to ==> {save_path}')
+
+    def load_metrics(self, load_path):
+        """Load training metrics from disk.
+        
+        Args:
+            load_path: Path to the metrics file.
+            
+        Returns:
+            tuple: Lists of training losses, validation losses, and global steps.
+        """
+        if load_path==None:
+            return
+        
+        state_dict = torch.load(load_path, map_location=self.device)
+        print(f'Model loaded from <== {load_path}')
+        
+        return state_dict['train_loss_list'], state_dict['valid_loss_list'], state_dict['global_steps_list']
+    
+    def train(self, train_df, valid_df, model_path="./model/BERT"):
+        """Train the BERT model.
+        
+        Args:
+            train_df: Training DataFrame with text and labels.
+            valid_df: Validation DataFrame with text and labels.
+            model_path: Path to save model.
+        """
+        train_dataset = TextDataset(train_df, self.tokenizer, self.MAX_SEQ_LEN)
+        valid_dataset = TextDataset(valid_df, self.tokenizer, self.MAX_SEQ_LEN)
+
+        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=self.collate_fn)
+        valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False, collate_fn=self.collate_fn)
+
+        running_loss = 0.0
+        valid_running_loss = 0.0
+        global_step = 0
+        train_loss_list = []
+        valid_loss_list = []
+        global_steps_list = []
+
+        model = BERT().to(self.device)
+        optimizer = optim.Adam(model.parameters(), lr=1e-5)
+        criterion= nn.BCELoss()
+
+        num_epochs=5
+        eval_every=None
+        best_valid_loss=float("Inf")
+
+        if eval_every is None:
+            eval_every = len(train_loader) // 2
+
+        model.train()
+        for epoch in range(num_epochs):
+            for batch in train_loader:
+                labels = batch["label"].type(torch.LongTensor)
+                titletext = batch["titletext"].type(torch.LongTensor) 
+                labels = labels.to(self.device)
+                titletext = titletext.to(self.device)
+
+                output = model(titletext, labels)
+                loss, _ = output  
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                running_loss += loss.item()
+                global_step += 1
+
+                if global_step % eval_every == 0:
+                    model.eval()
+                    with torch.no_grad():  
+                        valid_running_loss = 0.0  
+
+                        for batch in valid_loader:
+                            labels = batch["label"].type(torch.LongTensor)
+                            titletext = batch["titletext"].type(torch.LongTensor) 
+                            labels = labels.to(self.device)
+                            titletext = titletext.to(self.device)
+                            
+                            output = model(titletext, labels)
+                            loss, _ = output  
+                            
+                            valid_running_loss += loss.item()
+
+                    average_train_loss = running_loss / eval_every
+                    average_valid_loss = valid_running_loss / len(valid_loader)
+                    train_loss_list.append(average_train_loss)
+                    valid_loss_list.append(average_valid_loss)
+                    global_steps_list.append(global_step)
+
+                    running_loss = 0.0
+                    model.train()
+
+                    print(f"Epoch [{epoch+1}/{num_epochs}], Step [{global_step}/{num_epochs * len(train_loader)}], "
+                        f"Train Loss: {average_train_loss:.4f}, Valid Loss: {average_valid_loss:.4f}")
+
+                    if best_valid_loss > average_valid_loss:
+                        best_valid_loss = average_valid_loss
+                        self.save_checkpoint(f"{model_path}/model.pt", model, best_valid_loss)
+                        self.save_metrics(f"{model_path}/metrics.pt", train_loss_list, valid_loss_list, global_steps_list)
+
+        self.save_metrics(f"{model_path}/metrics.pt", train_loss_list, valid_loss_list, global_steps_list)
+        print("Finished Training!")
+
+    def evaluate(self, test_df, model_path="./model/BERT"):
+        """Evaluate the BERT model.
+        
+        Args:
+            model: The model to evaluate
+            test_df the dataframe of test
+        """
+        model = BERT().to(self.device)
+        self.load_checkpoint(f"{model_path}/model.pt", model)
+        
+        test_dataset = TextDataset(test_df, self.tokenizer, self.MAX_SEQ_LEN)
+        test_loader = DataLoader(test_dataset, batch_size=16, shuffle=True, collate_fn=self.collate_fn)
+        
+        y_pred = []
+        y_true = []
+        y_proba = []  
+        
+        model.eval()
+        with torch.no_grad():
+            for batch in test_loader:
+                labels = batch["label"].type(torch.LongTensor)
+                titletext = batch["titletext"].type(torch.LongTensor) 
+                labels = labels.to(self.device)
+                titletext = titletext.to(self.device)
+    
+                output = model.encoder(titletext)
+                logits = output.logits
+                probs = torch.softmax(logits, dim=1)  
+                preds = torch.argmax(probs, dim=1)    
+    
+                y_pred.extend(preds.tolist())
+                y_proba.extend(probs[:, 1].tolist()) 
+                y_true.extend(labels.tolist())
+    
+        return y_true, y_pred, y_proba
+
+

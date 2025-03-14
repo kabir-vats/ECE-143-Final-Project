@@ -104,7 +104,7 @@ python src/evaluate.py --model_name naive_bayes --model_path nb_model.pkl --save
 
 1. Modify "dp" variable in llmsAsChecker/interact.py to the directory of Fake.csv and True.csv
 
-2. Run llmsAsChecker/interact.py and wait until 4 .json file appears
+2. Run llmsAsChecker/interact.py and wait until 4 .json file appear
 
 ## Results
 
@@ -116,7 +116,7 @@ The evaluation script generates several visualization plots:
 
 Results are saved in the specified output directory and displayed during evaluation.
 
-The output from LLMs are recorded in 4 .json file in  llmsAsChecker/data
+The outputs from LLMs are recorded in 4 .json file in llmsAsChecker/data
 
 
 ## Acknowledgments

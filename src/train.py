@@ -84,4 +84,4 @@ if __name__ == "__main__":
     parser.add_argument("--tokenizer_name", type=str, default="tfidf")
     parser.add_argument("--save_path", type=str, default="model.pkl")
     args = parser.parse_args()
-    train_LSTM_classifier(args.save_path) if args.model_name == "LSTM" else train_text_classifier(args.model_name, args.tokenizer_name, args.save_path)
+    train_LSTM_classifier(args.save_path) if args.model_name == "LSTM" else (train_BERT_classifier(args.save_path) if args.model_name == "BERT" else train_text_classifier(args.model_name, args.tokenizer_name, args.save_path))

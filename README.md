@@ -36,7 +36,8 @@ A comprehensive fake news detection system using multpie machine learning approa
   - Count Vectorization
 
 - Modern deep learning techniques
-  - Long Short-Term Memory (LSTM)
+  - Long Short-Term Memory (LSTM) RNN
+  - Transformer fine tuning with BERT
 
 - Comprehensive evaluation metrics:
   - Accuracy
@@ -78,7 +79,7 @@ python src/train.py --model_name [model] --tokenizer_name [tokenizer] --save_pat
 ```
 
 Available options:
-- model_name: naive_bayes, logistic_regression, svm, random_forest, knn
+- model_name: naive_bayes, logistic_regression, svm, random_forest, knn, LSTM, BERT
 - tokenizer_name: tfidf, count
 - save_path: path to save the trained model
 

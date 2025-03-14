@@ -1,6 +1,6 @@
 # Fake News Detection with Machine Learning
 
-A comprehensive fake news detection system using multpie machine learning approaches and text classification techniques.
+A comprehensive fake news detection system using muliple machine learning approaches and text classification techniques.
 
 ## Project Structure
 ```
@@ -16,9 +16,10 @@ A comprehensive fake news detection system using multpie machine learning approa
 │   └── evaluate.py       # Model evaluation and visualization
 ├── raw/                  # Directory for raw dataset files
 ├── models/              # Directory for saved models
-├── docs/                # Project reports
+├── docs/                # Project final presentation
 ├── results/             # Evaluation results
-├── notebooks/           # Project demos
+├── notebooks/           # Project development notebooks
+├── demo.ipynb           # Final jupyter demonstration with report visualizations
 └── requirements.txt     # Project dependencies
 ```
 
